@@ -33,7 +33,6 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 intents.guilds = True
-intents.moderation = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -45,28 +44,22 @@ async def on_ready():
             SERVER_SETTINGS[guild.id] = {
                 "name": guild.name,
                 "otorol_id": "",
-                "log_kanal_id": "",
-                "hosgeldin_kanal_id": "",
-                "hosgeldin_mesaji": "Hoşgeldin {user} seninle birlikte {member_count} kişi olduk"
+                "hosgeldin_kanal_id": ""
             }
         else:
             SERVER_SETTINGS[guild.id]["name"] = guild.name
             SERVER_SETTINGS[guild.id].setdefault("otorol_id", "")
-            SERVER_SETTINGS[guild.id].setdefault("log_kanal_id", "")
             SERVER_SETTINGS[guild.id].setdefault("hosgeldin_kanal_id", "")
-            SERVER_SETTINGS[guild.id].setdefault("hosgeldin_mesaji", "Hoşgeldin {user} seninle birlikte {member_count} kişi olduk")
     verileri_kaydet()
-    print(f"Bot aktif: {bot.user}")
+    print(f"Kesintisiz bot aktif: {bot.user}")
 
-# --- BOT ÖZELLİKLERİ ---
-
-# 1. Selamlama Sistemi ("sa" / "SA")
+# --- MESAJ VE ETKİNLİK YÖNETİCİSİ ---
 @bot.event
 async def on_message(message):
     if message.author.bot:
         return
 
-    # Mesaj içeriği tam olarak "sa" veya "SA" ise (boşluksuz)
+    # "sa" / "SA" kontrolü
     if message.content.strip().lower() == "sa":
         try:
             await message.channel.send(f"Aleyküm selam {message.author.mention}")
@@ -75,12 +68,12 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-# 2. Gelen Üye (Otorol + Hoş Geldin)
 @bot.event
 async def on_member_join(member):
     guild_id = member.guild.id
     settings = SERVER_SETTINGS.get(guild_id, {})
     
+    # Otorol
     rol_id = settings.get("otorol_id")
     if rol_id:
         rol = member.guild.get_role(int(rol_id))
@@ -90,19 +83,18 @@ async def on_member_join(member):
             except:
                 pass
 
+    # Hoş Geldin Mesajı
     HC_kanal_id = settings.get("hosgeldin_kanal_id")
     if HC_kanal_id:
         kanal = member.guild.get_channel(int(HC_kanal_id))
         if kanal:
-            ham_mesaj = settings.get("hosgeldin_mesaji", "Hoşgeldin {user} seninle birlikte {member_count} kişi olduk")
             uye_sayisi = str(member.guild.member_count)
-            mesaj = ham_mesaj.replace("{user}", member.mention).replace("{member_count}", uye_sayisi).replace("{server}", member.guild.name)
+            mesaj = f"Hoşgeldin {member.mention} seninle birlikte {uye_sayisi} kişi olduk"
             try:
                 await kanal.send(mesaj)
             except:
                 pass
 
-# 3. Giden Üye (Ayrıldı Mesajı)
 @bot.event
 async def on_member_remove(member):
     guild_id = member.guild.id
@@ -117,52 +109,6 @@ async def on_member_remove(member):
                 await kanal.send(mesaj)
             except:
                 pass
-
-# 4. Rol Log Sistemi
-@bot.event
-async def on_member_update(before, after):
-    guild_id = after.guild.id
-    settings = SERVER_SETTINGS.get(guild_id, {})
-    log_id = settings.get("log_kanal_id")
-    if not log_id:
-        return
-        
-    kanal = after.guild.get_channel(int(log_id))
-    if not kanal:
-        return
-
-    eklenen = [r for r in after.roles if r not in before.roles]
-    kaldirilan = [r for r in before.roles if r not in after.roles]
-
-    if not eklenen and not kaldirilan:
-        return
-
-    islemi_yapan = "Bilinmiyor / Bot"
-    try:
-        async for entry in after.guild.audit_logs(limit=3, action=discord.AuditLogAction.member_role_update):
-            if entry.target.id == after.id:
-                islemi_yapan = entry.user.name
-                break
-    except:
-        pass
-
-    for rol in eklenen:
-        metin = (
-            f"🟢 **{after.name}** adlı kullanıcıya bir rol eklendi.\n\n"
-            f"📌 **Eklenen Rol:** `{rol.name}`\n"
-            f"🛠️ **İşlemi Yapan:** `{islemi_yapan}`"
-        )
-        embed = discord.Embed(description=metin, color=discord.Color.green())
-        await kanal.send(embed=embed)
-
-    for rol in kaldirilan:
-        metin = (
-            f"🔴 **{after.name}** adlı kullanıcıdan bir rol kaldırıldı.\n\n"
-            f"📌 **Kaldırılan Rol:** `{rol.name}`\n"
-            f"🛠️ **İşlemi Yapan:** `{islemi_yapan}`"
-        )
-        embed = discord.Embed(description=metin, color=discord.Color.red())
-        await kanal.send(embed=embed)
 
 
 # --- WEB PANELİ (FLASK) ---
@@ -210,7 +156,7 @@ SERVER_HTML = """
         body { background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1920&auto=format&fit=crop') no-repeat center center fixed; background-size: cover; color: #dbdee1; font-family: sans-serif; padding: 20px; }
         .container { max-width: 650px; margin: auto; background: rgba(43, 45, 49, 0.9); backdrop-filter: blur(10px); padding: 25px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
         h2, h3 { color: #fff; text-align: center; }
-        select, input, button { width: 100%; padding: 12px; margin: 8px 0 15px 0; background: #1e1f22; color: #fff; border: 1px solid #383a40; border-radius: 6px; box-sizing: border-box; }
+        select, button { width: 100%; padding: 12px; margin: 8px 0 15px 0; background: #1e1f22; color: #fff; border: 1px solid #383a40; border-radius: 6px; box-sizing: border-box; }
         button { background: #5865f2; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; }
         button:hover { background: #4752c4; }
         .back-btn { background: #4e5058; margin-bottom: 15px; display: inline-block; text-align: center; text-decoration: none; color: white; padding: 10px; border-radius: 6px; width: 100%; font-weight: bold; }
@@ -239,14 +185,6 @@ SERVER_HTML = """
                 {% endfor %}
             </select>
 
-            <label>Rol Log Kanalı:</label>
-            <select name="log_kanal_id">
-                <option value="">-- Kanal Seçilmedi --</option>
-                {% for channel in guild.text_channels %}
-                    <option value="{{ channel.id }}" {% if current_settings.get('log_kanal_id')|string == channel.id|string %}selected{% endif %}>#{{ channel.name }}</option>
-                {% endfor %}
-            </select>
-
             <label>Hoş Geldin & Ayrılış Kanalı:</label>
             <select name="hosgeldin_kanal_id">
                 <option value="">-- Kanal Seçilmedi --</option>
@@ -254,9 +192,6 @@ SERVER_HTML = """
                     <option value="{{ channel.id }}" {% if current_settings.get('hosgeldin_kanal_id')|string == channel.id|string %}selected{% endif %}>#{{ channel.name }}</option>
                 {% endfor %}
             </select>
-
-            <label>Hoş Geldin Mesajı ({user} ve {member_count} kullanabilirsin):</label>
-            <input type="text" name="hosgeldin_mesaji" value="{{ current_settings.get('hosgeldin_mesaji', '') }}">
 
             <button type="submit">Ayarları Kaydet</button>
         </form>
@@ -281,18 +216,14 @@ def server_settings(guild_id):
         SERVER_SETTINGS[guild_id] = {
             "name": guild.name,
             "otorol_id": "",
-            "log_kanal_id": "",
-            "hosgeldin_kanal_id": "",
-            "hosgeldin_mesaji": "Hoşgeldin {user} seninle birlikte {member_count} kişi olduk"
+            "hosgeldin_kanal_id": ""
         }
 
     saved = False
     if request.method == "POST":
         SERVER_SETTINGS[guild_id]["name"] = guild.name
         SERVER_SETTINGS[guild_id]["otorol_id"] = request.form.get("otorol_id")
-        SERVER_SETTINGS[guild_id]["log_kanal_id"] = request.form.get("log_kanal_id")
         SERVER_SETTINGS[guild_id]["hosgeldin_kanal_id"] = request.form.get("hosgeldin_kanal_id")
-        SERVER_SETTINGS[guild_id]["hosgeldin_mesaji"] = request.form.get("hosgeldin_mesaji")
         
         verileri_kaydet()
         saved = True
@@ -305,4 +236,3 @@ def run_flask():
 if __name__ == "__main__":
     threading.Thread(target=run_flask, daemon=True).start()
     bot.run(os.environ.get("TOKEN"))
-    
