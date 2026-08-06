@@ -33,6 +33,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 intents.guilds = True
+intents.moderation = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -46,20 +47,35 @@ async def on_ready():
                 "otorol_id": "",
                 "log_kanal_id": "",
                 "hosgeldin_kanal_id": "",
-                "hosgeldin_mesaji": "Hos geldin {user}! Sunucumuz seninle daha guzel."
+                "hosgeldin_mesaji": "Hoşgeldin {user} seninle birlikte {member_count} kişi olduk"
             }
         else:
             SERVER_SETTINGS[guild.id]["name"] = guild.name
             SERVER_SETTINGS[guild.id].setdefault("otorol_id", "")
             SERVER_SETTINGS[guild.id].setdefault("log_kanal_id", "")
             SERVER_SETTINGS[guild.id].setdefault("hosgeldin_kanal_id", "")
-            SERVER_SETTINGS[guild.id].setdefault("hosgeldin_mesaji", "Hos geldin {user}!")
+            SERVER_SETTINGS[guild.id].setdefault("hosgeldin_mesaji", "Hoşgeldin {user} seninle birlikte {member_count} kişi olduk")
     verileri_kaydet()
     print(f"Bot aktif: {bot.user}")
 
 # --- BOT ÖZELLİKLERİ ---
 
-# 1. Üye Katılım (Otorol + Hoş Geldin Mesajı)
+# 1. Selamlama Sistemi ("sa" / "SA")
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+    # Mesaj içeriği tam olarak "sa" veya "SA" ise (boşluksuz)
+    if message.content.strip().lower() == "sa":
+        try:
+            await message.channel.send(f"Aleyküm selam {message.author.mention}")
+        except:
+            pass
+
+    await bot.process_commands(message)
+
+# 2. Gelen Üye (Otorol + Hoş Geldin)
 @bot.event
 async def on_member_join(member):
     guild_id = member.guild.id
@@ -78,14 +94,31 @@ async def on_member_join(member):
     if HC_kanal_id:
         kanal = member.guild.get_channel(int(HC_kanal_id))
         if kanal:
-            ham_mesaj = settings.get("hosgeldin_mesaji", "Hos geldin {user}!")
-            mesaj = ham_mesaj.replace("{user}", member.mention).replace("{server}", member.guild.name)
+            ham_mesaj = settings.get("hosgeldin_mesaji", "Hoşgeldin {user} seninle birlikte {member_count} kişi olduk")
+            uye_sayisi = str(member.guild.member_count)
+            mesaj = ham_mesaj.replace("{user}", member.mention).replace("{member_count}", uye_sayisi).replace("{server}", member.guild.name)
             try:
                 await kanal.send(mesaj)
             except:
                 pass
 
-# 2. Rol Log Sistemi
+# 3. Giden Üye (Ayrıldı Mesajı)
+@bot.event
+async def on_member_remove(member):
+    guild_id = member.guild.id
+    settings = SERVER_SETTINGS.get(guild_id, {})
+    
+    HC_kanal_id = settings.get("hosgeldin_kanal_id")
+    if HC_kanal_id:
+        kanal = member.guild.get_channel(int(HC_kanal_id))
+        if kanal:
+            mesaj = f"{member.name} ayrıldı..."
+            try:
+                await kanal.send(mesaj)
+            except:
+                pass
+
+# 4. Rol Log Sistemi
 @bot.event
 async def on_member_update(before, after):
     guild_id = after.guild.id
@@ -104,12 +137,31 @@ async def on_member_update(before, after):
     if not eklenen and not kaldirilan:
         return
 
+    islemi_yapan = "Bilinmiyor / Bot"
+    try:
+        async for entry in after.guild.audit_logs(limit=3, action=discord.AuditLogAction.member_role_update):
+            if entry.target.id == after.id:
+                islemi_yapan = entry.user.name
+                break
+    except:
+        pass
+
     for rol in eklenen:
-        embed = discord.Embed(description=f"🟢 **{after.mention}** kullanıcısına **{rol.name}** rolü eklendi.", color=discord.Color.green())
+        metin = (
+            f"🟢 **{after.name}** adlı kullanıcıya bir rol eklendi.\n\n"
+            f"📌 **Eklenen Rol:** `{rol.name}`\n"
+            f"🛠️ **İşlemi Yapan:** `{islemi_yapan}`"
+        )
+        embed = discord.Embed(description=metin, color=discord.Color.green())
         await kanal.send(embed=embed)
 
     for rol in kaldirilan:
-        embed = discord.Embed(description=f"🔴 **{after.mention}** kullanıcısından **{rol.name}** rolü kaldırıldı.", color=discord.Color.red())
+        metin = (
+            f"🔴 **{after.name}** adlı kullanıcıdan bir rol kaldırıldı.\n\n"
+            f"📌 **Kaldırılan Rol:** `{rol.name}`\n"
+            f"🛠️ **İşlemi Yapan:** `{islemi_yapan}`"
+        )
+        embed = discord.Embed(description=metin, color=discord.Color.red())
         await kanal.send(embed=embed)
 
 
@@ -195,7 +247,7 @@ SERVER_HTML = """
                 {% endfor %}
             </select>
 
-            <label>Hoş Geldin Kanalı:</label>
+            <label>Hoş Geldin & Ayrılış Kanalı:</label>
             <select name="hosgeldin_kanal_id">
                 <option value="">-- Kanal Seçilmedi --</option>
                 {% for channel in guild.text_channels %}
@@ -203,7 +255,7 @@ SERVER_HTML = """
                 {% endfor %}
             </select>
 
-            <label>Hoş Geldin Mesajı ({user} etiketi kullanabilirsin):</label>
+            <label>Hoş Geldin Mesajı ({user} ve {member_count} kullanabilirsin):</label>
             <input type="text" name="hosgeldin_mesaji" value="{{ current_settings.get('hosgeldin_mesaji', '') }}">
 
             <button type="submit">Ayarları Kaydet</button>
@@ -223,7 +275,7 @@ def server_settings(guild_id):
     verileri_yukle()
     guild = bot.get_guild(guild_id)
     if not guild:
-        return "Sunucu bulunamadı!", 404
+        return "Sunucuyu bulamadım!", 404
 
     if guild_id not in SERVER_SETTINGS:
         SERVER_SETTINGS[guild_id] = {
@@ -231,7 +283,7 @@ def server_settings(guild_id):
             "otorol_id": "",
             "log_kanal_id": "",
             "hosgeldin_kanal_id": "",
-            "hosgeldin_mesaji": "Hos geldin {user}!"
+            "hosgeldin_mesaji": "Hoşgeldin {user} seninle birlikte {member_count} kişi olduk"
         }
 
     saved = False
