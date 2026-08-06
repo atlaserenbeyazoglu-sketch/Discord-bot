@@ -32,15 +32,11 @@ async def on_ready():
         SET.setdefault(g.id, {"name": g.name, "otorol_id": "", "hosgeldin_kanal_id": ""})
         SET[g.id]["name"] = g.name
     kaydet()
-    
-    # --- KOMUTLARIN ANINDA ÇALIŞMASI İÇİN SENKRODİZASYON AYARI ---
-    # Botun katıldığı tüm sunucularda komutların anında senkronize olması için:
     try:
         await bot.tree.sync()
-        print("✅ Tüm komutlar başarıyla senkronize edildi (Sync aktif)!")
+        print("✅ Tüm komutlar başarıyla senkronize edildi!")
     except Exception as e:
         print(f"❌ Sync hatası: {e}")
-
     print(f"Bot aktif edildi: {bot.user}")
     print("--------------------------------------------------")
     print("🌐 WEB KONTROL PANELİ AKTİF")
@@ -62,18 +58,42 @@ def yetki_kontrol(interaction, perm):
 async def hata_mesaji(interaction, metin):
     await interaction.response.send_message(f"❌ {metin}", ephemeral=True)
 
-# --- WEB PANEL LİNK KOMUTU ---
-@bot.tree.command(name="panel", description="Web kontrol paneli linkini gönderir")
+# --- 1. WEB PANEL LİNKİ VE YARDIM/KOMUTLAR ---
+@bot.tree.command(name="panel", description="Web kontrol paneli linkini gönderir.")
 async def panel(interaction: discord.Interaction):
     embed = discord.Embed(
         title="🌐 Web Kontrol Paneli", 
-        description="Sunucu ayarlarını (Otorol ve Hoş Geldin Kanalı) yönetmek için web panelini kullanabilirsin.", 
+        description="Sunucu ayarlarını yönetmek için web panelini kullanabilirsin.", 
         color=0x5865F2
     )
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-# --- İSTEDİĞİN ÖZEL KOMUTLAR ---
-@bot.tree.command(name="sil", description="Belirtilen miktarda mesajı temizler")
+@bot.tree.command(name="komutlar", description="Sunucudaki aktif bot komutlarını gösterir.")
+async def komutlar(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="📜 Bot Komut Listesi",
+        description="Aşağıdan mevcut tüm komutları inceleyebilirsin:",
+        color=0x5865F2
+    )
+    embed.add_field(
+        name="🛠️ Yönetim ve Moderasyon",
+        value=(
+            "**/komutlar** - Komut listesini gösterir.\n"
+            "**/panel** - Web panel linkini atar.\n"
+            "**/sil** - Belirtilen miktarda mesajı temizler.\n"
+            "**/lock** - Kanalı kitler ve seçilen rolün yazma iznini ayarlar.\n"
+            "**/unlock** - Kanalın kilidini açar.\n"
+            "**/mute** - Kullanıcıya zaman aşımı (susturma) uygular.\n"
+            "**/unmute** - Kullanıcının susturmasını kaldırır.\n"
+            "**/yavasmod** - Kanalın yavaş mod süresini ayarlar.\n"
+            "**/kanalizin** - Kanalı hangi rollerin görüp göremeyeceğini ayarlar."
+        ),
+        inline=False
+    )
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+# --- 2. MESAJ TEMİZLEME ---
+@bot.tree.command(name="sil", description="Belirtilen miktarda mesajı temizler.")
 @app_commands.describe(limit="Silinecek mesaj sayısı")
 async def sil(interaction: discord.Interaction, limit: int = 5):
     if not yetki_kontrol(interaction, "manage_messages"):
@@ -82,72 +102,69 @@ async def sil(interaction: discord.Interaction, limit: int = 5):
     silinenler = await interaction.channel.purge(limit=limit)
     await interaction.followup.send(f"🧹 Başarıyla {len(silinenler)} mesaj silindi.", ephemeral=True)
 
-@bot.tree.command(name="rolver", description="Üyeye belirtilen rolü verir")
-@app_commands.describe(member="Hedef üye", role="Verilecek rol")
-async def rolver(interaction: discord.Interaction, member: discord.Member, role: discord.Role):
-    if not yetki_kontrol(interaction, "manage_roles"):
-        return await hata_mesaji(interaction, "Rolleri yönet yetkiniz bulunmuyor.")
-    await member.add_roles(role)
-    await interaction.response.send_message(f"✅ {member.name} adlı üyeye {role.name} rolü verildi.")
-
-@bot.tree.command(name="rolal", description="Üyeden belirtilen rolü alır")
-@app_commands.describe(member="Hedef üye", role="Alınacak rol")
-async def rolal(interaction: discord.Interaction, member: discord.Member, role: discord.Role):
-    if not yetki_kontrol(interaction, "manage_roles"):
-        return await hata_mesaji(interaction, "Rolleri yönet yetkiniz bulunmuyor.")
-    await member.remove_roles(role)
-    await interaction.response.send_message(f"✅ {member.name} adlı üyeden {role.name} alındı.")
-
-@bot.tree.command(name="rololustur", description="Yeni bir rol oluşturur")
-@app_commands.describe(isim="Rolün adı")
-async def rololustur(interaction: discord.Interaction, isim: str):
-    if not yetki_kontrol(interaction, "manage_roles"):
-        return await hata_mesaji(interaction, "Rolleri yönet yetkiniz bulunmuyor.")
-    await interaction.guild.create_role(name=isim)
-    await interaction.response.send_message(f"✨ {isim} adlı rol başarıyla oluşturuldu.")
-
-@bot.tree.command(name="rolbilgi", description="Bir rol hakkında bilgi verir")
-@app_commands.describe(role="Bilgisi istenen rol")
-async def rolbilgi(interaction: discord.Interaction, role: discord.Role):
-    embed = discord.Embed(title=f"Rol Bilgisi: {role.name}", color=role.color)
-    embed.add_field(name="Rol ID", value=role.id, inline=True)
-    embed.add_field(name="Rol Üye Sayısı", value=len(role.members), inline=True)
-    embed.add_field(name="Oluşturulma Tarihi", value=role.created_at.strftime("%d-%m-%Y"), inline=False)
-    await interaction.response.send_message(embed=embed)
-
-@bot.tree.command(name="kanalolustur", description="Yeni bir metin kanalı oluşturur")
-@app_commands.describe(isim="Kanal adı")
-async def kanalolustur(interaction: discord.Interaction, isim: str):
+# --- 3. GELİŞMİŞ LOCK (KİLİTLEME VE ROL YAZMA İZNİ) ---
+@bot.tree.command(name="lock", description="Kanalı kilitler ve seçilen rolün yazma iznini belirler.")
+@app_commands.describe(
+    rol="İzin verilecek veya kısıtlanacak rol", 
+    durum="True (Yazabilsin), False (Yazamasın)"
+)
+async def lock(interaction: discord.Interaction, rol: discord.Role, durum: bool):
     if not yetki_kontrol(interaction, "manage_channels"):
         return await hata_mesaji(interaction, "Kanalları yönet yetkiniz yok.")
-    await interaction.guild.create_text_channel(name=isim)
-    await interaction.response.send_message(f"📁 #{isim} metin kanalı oluşturuldu.")
+    
+    # Herkesin (@everyone) mesaj göndermesini kapat
+    await interaction.channel.set_permissions(interaction.guild.default_role, send_messages=False)
+    # Belirtilen rolün yazma iznini ayarla
+    await interaction.channel.set_permissions(rol, send_messages=durum)
+    
+    durum_metni = "açıldı" if durum else "kapatıldı"
+    await interaction.response.send_message(f"🔒 Kanal kilitlendi. **{rol.name}** rolünün bu kanala yazma izni **{durum_metni}**.")
 
-@bot.tree.command(name="seskanalolustur", description="Yeni bir ses kanalı oluşturur")
-@app_commands.describe(isim="Ses kanalının adı")
-async def seskanalolustur(interaction: discord.Interaction, isim: str):
+@bot.tree.command(name="unlock", description="Kanalın kilidini açar ve herkesin yazmasını sağlar.")
+async def unlock(interaction: discord.Interaction):
     if not yetki_kontrol(interaction, "manage_channels"):
         return await hata_mesaji(interaction, "Kanalları yönet yetkiniz yok.")
-    await interaction.guild.create_voice_channel(name=isim)
-    await interaction.response.send_message(f"🔊 {isim} ses kanalı oluşturuldu.")
+    await interaction.channel.set_permissions(interaction.guild.default_role, send_messages=True)
+    await interaction.response.send_message("🔓 Kanalın kilidi açıldı, herkes mesaj yazabilir.")
 
-# --- DİĞER TEMEL KOMUTLAR VE BİLGİLER ---
-@bot.tree.command(name="ping", description="Botun gecikme süresini gösterir")
-async def ping(interaction: discord.Interaction):
-    latency = round(bot.latency * 1000)
-    await interaction.response.send_message(f"Pong! 🏓 Gecikme süresi: **{latency}ms**")
+# --- 4. SUSTURMA (MUTE / UNMUTE) VE YAVAŞMOD ---
+@bot.tree.command(name="mute", description="Kullanıcıya belirtilen süre kadar zaman aşımı uygular.")
+@app_commands.describe(uye="Susturulacak üye", saat="Süre (saat cinsinden)", sebep="Susturma sebebi")
+async def mute(interaction: discord.Interaction, uye: discord.Member, saat: int = 1, sebep: str = "Belirtilmedi"):
+    if not yetki_kontrol(interaction, "moderate_members"):
+        return await hata_mesaji(interaction, "Üyeleri susturma yetkiniz yok.")
+    await uye.timeout(datetime.timedelta(hours=saat), reason=sebep)
+    await interaction.response.send_message(f"🔇 {uye.name} adlı kullanıcı {saat} saat süreyle susturuldu. Sebep: {sebep}")
 
-@bot.tree.command(name="sunucubilgi", description="Sunucu hakkında detaylı bilgi gösterir")
-async def sunucubilgi(interaction: discord.Interaction):
-    g = interaction.guild
-    embed = discord.Embed(title=f"📊 {g.name} Sunucu Bilgileri", color=0x5865F2)
-    if g.icon:
-        embed.set_thumbnail(url=g.icon.url)
-    embed.add_field(name="Sunucu Sahibi", value=g.owner, inline=True)
-    embed.add_field(name="Üye Sayısı", value=g.member_count, inline=True)
-    embed.add_field(name="Kanal Sayısı", value=len(g.channels), inline=True)
-    embed.add_field(name="Rol Sayısı", value=len(g.roles), inline=True)
-    await interaction.response.send_message(embed=embed)
+@bot.tree.command(name="unmute", description="Kullanıcının zaman aşımı susturmasını kaldırır.")
+@app_commands.describe(uye="Susturması kaldırılacak üye")
+async def unmute(interaction: discord.Interaction, uye: discord.Member):
+    if not yetki_kontrol(interaction, "moderate_members"):
+        return await hata_mesaji(interaction, "Yetkiniz yok.")
+    await uye.timeout(None)
+    await interaction.response.send_message(f"🔊 {uye.name} adlı kullanıcının susturması kaldırıldı.")
+
+@bot.tree.command(name="yavasmod", description="Kanal için yavaş mod süresini saniye cinsinden ayarlar.")
+@app_commands.describe(saniye="Saniye cinsini girin (0 kapatır)")
+async def yavasmod(interaction: discord.Interaction, saniye: int):
+    if not yetki_kontrol(interaction, "manage_channels"):
+        return await hata_mesaji(interaction, "Kanalı yönet yetkiniz yok.")
+    await interaction.channel.edit(slowmode_delay=saniye)
+    await interaction.response.send_message(f"⏳ Yavaş mod {saniye} saniye olarak ayarlandı.")
+
+# --- 5. GELİŞMİŞ KANAL GÖRÜNÜRLÜK AYARI ---
+@bot.tree.command(name="kanalizin", description="Kanalı belirli bir rolün görüp görmeyeceğini ayarlar.")
+@app_commands.describe(
+    rol="İşlem yapılacak rol", 
+    goruntuleme="True (Görebilsin), False (Göremesin/Gizlesin)"
+)
+async def kanalizin(interaction: discord.Interaction, rol: discord.Role, goruntuleme: bool):
+    if not yetki_kontrol(interaction, "manage_channels"):
+        return await hata_mesaji(interaction, "Kanalları yönet yetkiniz yok.")
+    
+    await interaction.channel.set_permissions(rol, view_channel=goruntuleme)
+    durum_metni = "görebilecek" f"şekilde açıldı" if goruntuleme else "göremeyecek" f"şekilde gizlendi"
+    await interaction.response.send_message(f"👁️ Kanal görünürlüğü güncellendi: **{rol.name}** rolü artık bu kanalı {durum_metni}.")
 
 # --- ÜYE ETKİNLİKLERİ ---
 @bot.event
@@ -197,7 +214,6 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     threading.Thread(target=lambda: app.run(host="0.0.0.0", port=port), daemon=True).start()
     
-    # Render'daki 'TOKEN' değişkenini okur
     discord_token = os.environ.get("TOKEN")
     bot.run(discord_token)
     
