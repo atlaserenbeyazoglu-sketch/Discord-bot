@@ -45,7 +45,7 @@ async def on_ready():
     verileri_kaydet()
     print(f"Bot aktif: {bot.user}")
 
-# --- WEB PANELİ (ARKA PLANLI) ---
+# --- WEB PANELİ (ROL VE KANAL LİSTELİ) ---
 app = Flask(__name__)
 
 PANEL_HTML = """
@@ -56,7 +56,6 @@ PANEL_HTML = """
     <title>Discord Bot Kontrol Paneli</title>
     <style>
         body { 
-            /* Arka plan görseli ve karartma efekti */
             background: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), 
                         url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1920&auto=format&fit=crop') no-repeat center center fixed;
             background-size: cover;
@@ -65,36 +64,57 @@ PANEL_HTML = """
             padding: 20px; 
         }
         .container { 
-            max-width: 600px; 
+            max-width: 650px; 
             margin: auto; 
-            background: rgba(43, 45, 49, 0.85); /* Hafif şeffaf panel */
-            backdrop-filter: blur(8px); /* Arkayı hafif bulanıklaştırır */
+            background: rgba(43, 45, 49, 0.9); 
+            backdrop-filter: blur(10px); 
             padding: 25px; 
             border-radius: 12px; 
             box-shadow: 0 8px 24px rgba(0,0,0,0.5); 
         }
         h2, h3 { color: #fff; text-align: center; }
-        input, button { width: 100%; padding: 12px; margin: 10px 0; background: #1e1f22; color: #fff; border: 1px solid #383a40; border-radius: 6px; box-sizing: border-box; }
+        select, button { width: 100%; padding: 12px; margin: 10px 0; background: #1e1f22; color: #fff; border: 1px solid #383a40; border-radius: 6px; box-sizing: border-box; }
         button { background: #5865f2; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; }
         button:hover { background: #4752c4; }
-        .server-box { background: rgba(17, 18, 20, 0.9); padding: 18px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #2b2d31; }
+        .server-box { background: rgba(17, 18, 20, 0.9); padding: 18px; margin-bottom: 20px; border-radius: 8px; border: 1px solid #2b2d31; }
+        label { font-size: 14px; color: #b5bac1; font-weight: bold; display: block; margin-top: 8px; }
     </style>
 </head>
 <body>
     <div class="container">
         <h2>🤖 Bot Yönetim Paneli</h2>
         <hr style="border:0; border-top:1px solid #383a40; margin-bottom: 20px;">
-        <h3>Sunucularınız</h3>
-        {% for gid, data in settings.items() %}
+        <h3>Sunucularınız ve Ayarlar</h3>
+        
+        {% for guild in bot_guilds %}
             <div class="server-box">
-                <h3>📢 {{ data.name }}</h3>
+                <h3>📢 {{ guild.name }}</h3>
                 <form method="POST">
-                    <input type="hidden" name="guild_id" value="{{ gid }}">
-                    <label>Otorol ID:</label>
-                    <input type="text" name="otorol_id" value="{{ data.otorol_id or '' }}" placeholder="Rol ID girin">
-                    <label>Log Kanal ID:</label>
-                    <input type="text" name="log_kanal_id" value="{{ data.log_kanal_id or '' }}" placeholder="Kanal ID girin">
-                    <button type="submit" name="kaydet" value="1">Ayarları Kaydet</button>
+                    <input type="hidden" name="guild_id" value="{{ guild.id }}">
+                    
+                    <label>Otorol Seçin:</label>
+                    <select name="otorol_id">
+                        <option value="">-- Rol Seçilmedi --</option>
+                        {% for role in guild.roles %}
+                            {% if role.name != "@everyone" %}
+                                <option value="{{ role.id }}" {% if settings.get(guild.id, {}).get('otorol_id')|string == role.id|string %}selected{% endif %}>
+                                    {{ role.name }}
+                                </option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+
+                    <label>Log Kanalı Seçin:</label>
+                    <select name="log_kanal_id">
+                        <option value="">-- Kanal Seçilmedi --</option>
+                        {% for channel in guild.text_channels %}
+                            <option value="{{ channel.id }}" {% if settings.get(guild.id, {}).get('log_kanal_id')|string == channel.id|string %}selected{% endif %}>
+                                #{{ channel.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+
+                    <button type="submit" name="kaydet" value="1">Kaydet</button>
                 </form>
             </div>
         {% endfor %}
@@ -109,13 +129,15 @@ def panel():
     if request.method == "POST":
         if "kaydet" in request.form:
             gid = int(request.form.get("guild_id"))
-            if gid in SERVER_SETTINGS:
-                SERVER_SETTINGS[gid]["otorol_id"] = request.form.get("otorol_id")
-                SERVER_SETTINGS[gid]["log_kanal_id"] = request.form.get("log_kanal_id")
-                verileri_kaydet()
+            if gid not in SERVER_SETTINGS:
+                SERVER_SETTINGS[gid] = {}
+            
+            SERVER_SETTINGS[gid]["otorol_id"] = request.form.get("otorol_id")
+            SERVER_SETTINGS[gid]["log_kanal_id"] = request.form.get("log_kanal_id")
+            verileri_kaydet()
             return redirect(url_for("panel"))
 
-    return render_template_string(PANEL_HTML, settings=SERVER_SETTINGS)
+    return render_template_string(PANEL_HTML, bot_guilds=bot.guilds, settings=SERVER_SETTINGS)
 
 def run_flask():
     app.run(host="0.0.0.0", port=10000)
