@@ -1,7 +1,7 @@
 import discord, json, os, datetime, threading
 from discord.ext import commands
 from discord import app_commands
-from flask import Flask, render_template_string, request
+from flask import Flask, render_template_string, request, session, redirect, url_for
 
 DOSYA = "ayarlar.json"
 SET = {}
@@ -39,7 +39,7 @@ async def on_ready():
         print(f"❌ Sync hatası: {e}")
     print(f"Bot aktif edildi: {bot.user}")
     print("--------------------------------------------------")
-    print("🌐 WEB KONTROL PANELİ AKTİF")
+    print("🌐 WEB KONTROL PANELİ AKTİF (Şifreli: 2904)")
     print("--------------------------------------------------")
 
 @bot.event
@@ -58,12 +58,12 @@ def yetki_kontrol(interaction, perm):
 async def hata_mesaji(interaction, metin):
     await interaction.response.send_message(f"❌ {metin}", ephemeral=True)
 
-# --- 1. WEB PANEL LİNKİ VE YARDIM/KOMUTLAR ---
+# --- 1. YARDIM VE PANEL KOMUTLARI ---
 @bot.tree.command(name="panel", description="Web kontrol paneli linkini gönderir.")
 async def panel(interaction: discord.Interaction):
     embed = discord.Embed(
         title="🌐 Web Kontrol Paneli", 
-        description="Sunucu ayarlarını yönetmek için web panelini kullanabilirsin.", 
+        description="Sunucu ayarlarını yönetmek için web panelini kullanabilirsin. (Şifre gereklidir)", 
         color=0x5865F2
     )
     await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -81,12 +81,14 @@ async def komutlar(interaction: discord.Interaction):
             "**/komutlar** - Komut listesini gösterir.\n"
             "**/panel** - Web panel linkini atar.\n"
             "**/sil** - Belirtilen miktarda mesajı temizler.\n"
-            "**/lock** - Kanalı kitler ve seçilen rolün yazma iznini ayarlar.\n"
+            "**/lock** - Kanalı kilitler ve seçilen rolün yazma iznini ayarlar.\n"
             "**/unlock** - Kanalın kilidini açar.\n"
-            "**/mute** - Kullanıcıya zaman aşımı (susturma) uygular.\n"
+            "**/mute** - Kullanıcıya zaman aşımı uygular.\n"
             "**/unmute** - Kullanıcının susturmasını kaldırır.\n"
-            "**/yavasmod** - Kanalın yavaş mod süresini ayarlar.\n"
-            "**/kanalizin** - Kanalı hangi rollerin görüp göremeyeceğini ayarlar."
+            "**/yavaşmod** - Kanalın yavaş mod süresini ayarlar.\n"
+            "**/kanalgörünülürlük** - Birden fazla rolün kanalı görüp görmeyeceğini ayarlar.\n"
+            "**/rolver** - Üyeye belirtilen rolü verir (Log tutulur).\n"
+            "**/rolal** - Üyeden belirtilen rolü alır (Log tutulur)."
         ),
         inline=False
     )
@@ -102,69 +104,115 @@ async def sil(interaction: discord.Interaction, limit: int = 5):
     silinenler = await interaction.channel.purge(limit=limit)
     await interaction.followup.send(f"🧹 Başarıyla {len(silinenler)} mesaj silindi.", ephemeral=True)
 
-# --- 3. GELİŞMİŞ LOCK (KİLİTLEME VE ROL YAZMA İZNİ) ---
+# --- 3. ROL VERME / ALMA VE LOGLAMA SİSTEMİ ---
+@bot.tree.command(name="rolver", description="Üyeye belirtilen rolü verir ve işlemi kaydeder.")
+@app_commands.describe(üye="Hedef üye", rol="Verilecek rol")
+async def rolver(interaction: discord.Interaction, üye: discord.Member, rol: discord.Role):
+    if not yetki_kontrol(interaction, "manage_roles"):
+        return await hata_mesaji(interaction, "Rolleri yönet yetkiniz bulunmuyor.")
+    await üye.add_roles(rol)
+    
+    # Konsol ve İşlem Logu
+    print(f"🟢 [ROL VERME] Yetkili: {interaction.user} | Üye: {üye} | Rol: {rol.name}")
+    
+    embed = discord.Embed(title="✅ Rol Verildi", color=0x57F287, timestamp=datetime.datetime.now())
+    embed.add_field(name="İşlemi Yapan", value=interaction.user.mention, inline=True)
+    embed.add_field(name="Hedef Üye", value=üye.mention, inline=True)
+    embed.add_field(name="Verilen Rol", value=rol.mention, inline=False)
+    await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="rolal", description="Üyeden belirtilen rolü alır ve işlemi kaydeder.")
+@app_commands.describe(üye="Hedef üye", rol="Alınacak rol")
+async def rolal(interaction: discord.Interaction, üye: discord.Member, rol: discord.Role):
+    if not yetki_kontrol(interaction, "manage_roles"):
+        return await hata_mesaji(interaction, "Rolleri yönet yetkiniz bulunmuyor.")
+    await üye.remove_roles(rol)
+    
+    # Konsol ve İşlem Logu
+    print(f"🔴 [ROL ALMA] Yetkili: {interaction.user} | Üye: {üye} | Rol: {rol.name}")
+    
+    embed = discord.Embed(title="⚠️ Rol Alındı", color=0xED4245, timestamp=datetime.datetime.now())
+    embed.add_field(name="İşlemi Yapan", value=interaction.user.mention, inline=True)
+    embed.add_field(name="Hedef Üye", value=üye.mention, inline=True)
+    embed.add_field(name="Alınan Rol", value=rol.mention, inline=False)
+    await interaction.response.send_message(embed=embed)
+
+# --- 4. GELİŞMİŞ LOCK VE UNLOCK ---
 @bot.tree.command(name="lock", description="Kanalı kilitler ve seçilen rolün yazma iznini belirler.")
-@app_commands.describe(
-    rol="İzin verilecek veya kısıtlanacak rol", 
-    durum="True (Yazabilsin), False (Yazamasın)"
-)
+@app_commands.describe(rol="İzin verilecek veya kısıtlanacak rol", durum="True (Yazabilsin), False (Yazamasın)")
 async def lock(interaction: discord.Interaction, rol: discord.Role, durum: bool):
     if not yetki_kontrol(interaction, "manage_channels"):
         return await hata_mesaji(interaction, "Kanalları yönet yetkiniz yok.")
     
-    # Herkesin (@everyone) mesaj göndermesini kapat
     await interaction.channel.set_permissions(interaction.guild.default_role, send_messages=False)
-    # Belirtilen rolün yazma iznini ayarla
     await interaction.channel.set_permissions(rol, send_messages=durum)
     
-    durum_metni = "açıldı" if durum else "kapatıldı"
-    await interaction.response.send_message(f"🔒 Kanal kilitlendi. **{rol.name}** rolünün bu kanala yazma izni **{durum_metni}**.")
+    durum_metni = "açıldı ✍️" if durum else "kapatıldı 🚫"
+    await interaction.response.send_message(f"🔒 Kanal başarıyla kilitlendi. **{rol.name}** rolünün bu kanala mesaj yazma izni **{durum_metni}**.")
 
 @bot.tree.command(name="unlock", description="Kanalın kilidini açar ve herkesin yazmasını sağlar.")
 async def unlock(interaction: discord.Interaction):
     if not yetki_kontrol(interaction, "manage_channels"):
         return await hata_mesaji(interaction, "Kanalları yönet yetkiniz yok.")
     await interaction.channel.set_permissions(interaction.guild.default_role, send_messages=True)
-    await interaction.response.send_message("🔓 Kanalın kilidi açıldı, herkes mesaj yazabilir.")
+    await interaction.response.send_message("🔓 Kanalın kilidi başarıyla kaldırıldı, herkes mesaj yazabilir.")
 
-# --- 4. SUSTURMA (MUTE / UNMUTE) VE YAVAŞMOD ---
+# --- 5. MUTE, UNMUTE VE YAVAŞMOD ---
 @bot.tree.command(name="mute", description="Kullanıcıya belirtilen süre kadar zaman aşımı uygular.")
-@app_commands.describe(uye="Susturulacak üye", saat="Süre (saat cinsinden)", sebep="Susturma sebebi")
-async def mute(interaction: discord.Interaction, uye: discord.Member, saat: int = 1, sebep: str = "Belirtilmedi"):
+@app_commands.describe(üye="Susturulacak üye", saat="Süre (saat cinsinden)", sebep="Susturma sebebi")
+async def mute(interaction: discord.Interaction, üye: discord.Member, saat: int = 1, sebep: str = "Belirtilmedi"):
     if not yetki_kontrol(interaction, "moderate_members"):
         return await hata_mesaji(interaction, "Üyeleri susturma yetkiniz yok.")
-    await uye.timeout(datetime.timedelta(hours=saat), reason=sebep)
-    await interaction.response.send_message(f"🔇 {uye.name} adlı kullanıcı {saat} saat süreyle susturuldu. Sebep: {sebep}")
+    await üye.timeout(datetime.timedelta(hours=saat), reason=sebep)
+    await interaction.response.send_message(f"🔇 **{üye.name}** adlı kullanıcı başarıyla **{saat} saat** süreyle susturuldu.\n📝 Sebep: `{sebep}`")
 
 @bot.tree.command(name="unmute", description="Kullanıcının zaman aşımı susturmasını kaldırır.")
-@app_commands.describe(uye="Susturması kaldırılacak üye")
-async def unmute(interaction: discord.Interaction, uye: discord.Member):
+@app_commands.describe(üye="Susturması kaldırılacak üye")
+async def unmute(interaction: discord.Interaction, üye: discord.Member):
     if not yetki_kontrol(interaction, "moderate_members"):
         return await hata_mesaji(interaction, "Yetkiniz yok.")
-    await uye.timeout(None)
-    await interaction.response.send_message(f"🔊 {uye.name} adlı kullanıcının susturması kaldırıldı.")
+    await üye.timeout(None)
+    await interaction.response.send_message(f"🔊 **{üye.name}** adlı kullanıcının susturması başarıyla kaldırıldı.")
 
-@bot.tree.command(name="yavasmod", description="Kanal için yavaş mod süresini saniye cinsinden ayarlar.")
+@bot.tree.command(name="yavaşmod", description="Kanal için yavaş mod süresini saniye cinsinden ayarlar.")
 @app_commands.describe(saniye="Saniye cinsini girin (0 kapatır)")
-async def yavasmod(interaction: discord.Interaction, saniye: int):
+async def yavaşmod(interaction: discord.Interaction, saniye: int):
     if not yetki_kontrol(interaction, "manage_channels"):
         return await hata_mesaji(interaction, "Kanalı yönet yetkiniz yok.")
     await interaction.channel.edit(slowmode_delay=saniye)
-    await interaction.response.send_message(f"⏳ Yavaş mod {saniye} saniye olarak ayarlandı.")
+    if saniye == 0:
+        await interaction.response.send_message("⏳ Yavaş mod bu kanal için tamamen kapatıldı.")
+    else:
+        await interaction.response.send_message(f"⏳ Bu kanal için yavaş mod başarıyla **{saniye} saniye** olarak ayarlandı.")
 
-# --- 5. GELİŞMİŞ KANAL GÖRÜNÜRLÜK AYARI ---
-@bot.tree.command(name="kanalizin", description="Kanalı belirli bir rolün görüp görmeyeceğini ayarlar.")
+# --- 6. KANAL GÖRÜNÜRLÜK (ÇOKLU ROL DESTEKLİ) ---
+@bot.tree.command(name="kanalgörünülürlük", description="Seçilen birden fazla rolün kanalı görüp görmeyeceğini ayarlar.")
 @app_commands.describe(
-    rol="İşlem yapılacak rol", 
-    goruntuleme="True (Görebilsin), False (Göremesin/Gizlesin)"
+    rol1="1. Rol", rol2="2. Rol (İsteğe bağlı)", 
+    rol3="3. Rol (İsteğe bağlı)", rol4="4. Rol (İsteğe bağlı)", 
+    görünürlük="True (Görebilsin), False (Gizlesin)"
 )
-async def kanalizin(interaction: discord.Interaction, rol: discord.Role, goruntuleme: bool):
+async def kanalgörünülürlük(
+    interaction: discord.Interaction, 
+    rol1: discord.Role, 
+    görünürlük: bool,
+    rol2: discord.Role = None, 
+    rol3: discord.Role = None, 
+    rol4: discord.Role = None
+):
     if not yetki_kontrol(interaction, "manage_channels"):
         return await hata_mesaji(interaction, "Kanalları yönet yetkiniz yok.")
     
-    await interaction.channel.set_permissions(rol, view_channel=goruntuleme)
-    durum_metni = "görebilecek" f"şekilde açıldı" if goruntuleme else "göremeyecek" f"şekilde gizlendi"
-    await interaction.response.send_message(f"👁️ Kanal görünürlüğü güncellendi: **{rol.name}** rolü artık bu kanalı {durum_metni}.")
+    roller = [r for r in [rol1, rol2, rol3, rol4] if r is not None]
+    islem_metni = "görebilecek" if görünürlük else "gizlenecek"
+    rol_isimleri = []
+
+    for r in roller:
+        await interaction.channel.set_permissions(r, view_channel=görünürlük)
+        rol_isimleri.append(r.name)
+
+    liste_str = ", ".join([f"**{name}**" for name in rol_isimleri])
+    await interaction.response.send_message(f"👁️ Kanal görünürlük ayarları güncellendi: {liste_str} rolleri için kanal artık {islem_metni}.")
 
 # --- ÜYE ETKİNLİKLERİ ---
 @bot.event
@@ -185,20 +233,43 @@ async def on_member_join(member):
             except:
                 pass
 
-# --- WEB PANELİ (FLASK) ---
+# --- WEB PANELİ (FLASK - ŞİFRELİ 2904) ---
 app = Flask(__name__)
+app.secret_key = "gizli_anahtar_2904"
 
-INDEX_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Panel</title><style>body{background:#2b2d31;color:#fff;font-family:sans-serif;padding:20px;}.box{max-width:500px;margin:auto;background:#313338;padding:20px;border-radius:8px;}.card{background:#111;padding:12px;margin-bottom:10px;border-radius:6px;display:flex;justify-content:space-between;align-items:center;}.btn{background:#5865f2;color:#fff;padding:8px 14px;border-radius:4px;text-decoration:none;font-weight:bold;}</style></head><body><div class="box"><h2>🤖 Sunucu Seç</h2>{% for g in guilds %}<div class="card"><span>📢 {{g.name}}</span><a href="/server/{{g.id}}" class="btn">Yönet</a></div>{% endfor %}</div></body></html>"""
+LOGIN_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Giriş</title><style>body{background:#2b2d31;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.box{background:#313338;padding:30px;border-radius:10px;width:300px;text-align:center;}input,button{width:100%;padding:10px;margin:10px 0;background:#1e1f22;color:#fff;border:1px solid #444;border-radius:5px;box-sizing:border-box;}button{background:#5865f2;font-weight:bold;cursor:pointer;}.err{color:#ed4245;font-size:14px;}</style></head><body><div class="box"><h2>🔐 Panel Girişi</h2>{% if error %}<p class="err">{{error}}</p>{% endif %}<form method="POST"><input type="password" name="password" placeholder="Şifre (2904)" required><button type="submit">Giriş Yap</button></form></div></body></html>"""
+
+INDEX_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Panel</title><style>body{background:#2b2d31;color:#fff;font-family:sans-serif;padding:20px;}.box{max-width:500px;margin:auto;background:#313338;padding:20px;border-radius:8px;}.card{background:#111;padding:12px;margin-bottom:10px;border-radius:6px;display:flex;justify-content:space-between;align-items:center;}.btn{background:#5865f2;color:#fff;padding:8px 14px;border-radius:4px;text-decoration:none;font-weight:bold;}.logout{color:#ed4245;text-decoration:none;float:right;font-size:14px;}</style></head><body><div class="box"><a href="/logout" class="logout">Çıkış Yap</a><h2>🤖 Sunucu Seç</h2>{% for g in guilds %}<div class="card"><span>📢 {{g.name}}</span><a href="/server/{{g.id}}" class="btn">Yönet</a></div>{% endfor %}</div></body></html>"""
 
 SERVER_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Ayarlar</title><style>body{background:#2b2d31;color:#fff;font-family:sans-serif;padding:20px;}.box{max-width:500px;margin:auto;background:#313338;padding:20px;border-radius:8px;}select,button{width:100%;padding:10px;margin:10px 0;background:#1e1f22;color:#fff;border:1px solid #444;border-radius:5px;}button{background:#5865f2;font-weight:bold;cursor:pointer;}.back{display:block;margin-bottom:15px;color:#00aff4;text-decoration:none;}</style></head><body><div class="box"><a href="/" class="back">⬅️ Geri</a><h2>⚙️ {{g.name}}</h2><form method="POST"><label>Otorol:</label><select name="otorol_id"><option value="">-- Seçilmedi --</option>{% for r in g.roles %}{% if r.name != "@everyone" %}<option value="{{r.id}}" {% if set.get('otorol_id')|string == r.id|string %}selected{% endif %}>{{r.name}}</option>{% endif %}{% endfor %}</select><label>Hoş Geldin Kanalı:</label><select name="hosgeldin_kanal_id"><option value="">-- Seçilmedi --</option>{% for c in g.text_channels %}<option value="{{c.id}}" {% if set.get('hosgeldin_kanal_id')|string == c.id|string %}selected{% endif %}>#{{c.name}}</option>{% endfor %}</select><button type="submit">Kaydet</button></form></div></body></html>"""
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = None
+    if request.method == "POST":
+        if request.form.get("password") == "2904":
+            session["logged_in"] = True
+            return redirect(url_for("index"))
+        else:
+            error = "Hatalı Şifre! (Şifre: 2904)"
+    return render_template_string(LOGIN_H, error=error)
+
+@app.route("/logout")
+def logout():
+    session.pop("logged_in", None)
+    return redirect(url_for("login"))
+
 @app.route("/")
 def index():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
     yukle()
     return render_template_string(INDEX_H, guilds=bot.guilds)
 
 @app.route("/server/<int:gid>", methods=["GET", "POST"])
 def server(gid):
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
     yukle()
     g = bot.get_guild(gid)
     if not g:
@@ -216,4 +287,3 @@ if __name__ == "__main__":
     
     discord_token = os.environ.get("TOKEN")
     bot.run(discord_token)
-    
