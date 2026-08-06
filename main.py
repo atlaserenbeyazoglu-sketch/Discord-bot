@@ -33,6 +33,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 intents.guilds = True
+intents.moderation = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -44,11 +45,13 @@ async def on_ready():
             SERVER_SETTINGS[guild.id] = {
                 "name": guild.name,
                 "otorol_id": "",
+                "log_kanal_id": "",
                 "hosgeldin_kanal_id": ""
             }
         else:
             SERVER_SETTINGS[guild.id]["name"] = guild.name
             SERVER_SETTINGS[guild.id].setdefault("otorol_id", "")
+            SERVER_SETTINGS[guild.id].setdefault("log_kanal_id", "")
             SERVER_SETTINGS[guild.id].setdefault("hosgeldin_kanal_id", "")
     verileri_kaydet()
     print(f"Kesintisiz bot aktif: {bot.user}")
@@ -109,6 +112,53 @@ async def on_member_remove(member):
                 await kanal.send(mesaj)
             except:
                 pass
+
+# --- ROL DEĞİŞTİRME BİLGİLENDİRME (LOG) SİSTEMİ ---
+@bot.event
+async def on_member_update(before, after):
+    guild_id = after.guild.id
+    settings = SERVER_SETTINGS.get(guild_id, {})
+    log_id = settings.get("log_kanal_id")
+    if not log_id:
+        return
+        
+    kanal = after.guild.get_channel(int(log_id))
+    if not kanal:
+        return
+
+    eklenen = [r for r in after.roles if r not in before.roles]
+    kaldirilan = [r for r in before.roles if r not in after.roles]
+
+    if not eklenen and not kaldirilan:
+        return
+
+    # İşlemi yapan yetkiliyi denetim kaydından bulma
+    islemi_yapan = "Bilinmiyor / Bot"
+    try:
+        async for entry in after.guild.audit_logs(limit=3, action=discord.AuditLogAction.member_role_update):
+            if entry.target.id == after.id:
+                islemi_yapan = entry.user.name
+                break
+    except:
+        pass
+
+    for rol in eklenen:
+        metin = (
+            f"🟢 **{after.name}** adlı kullanıcıya bir rol eklendi.\n\n"
+            f"📌 **Eklenen Rol:** `{rol.name}`\n"
+            f"🛠️ **İşlemi Yapan:** `{islemi_yapan}`"
+        )
+        embed = discord.Embed(description=metin, color=discord.Color.green())
+        await kanal.send(embed=embed)
+
+    for rol in kaldirilan:
+        metin = (
+            f"🔴 **{after.name}** adlı kullanıcıdan bir rol kaldırıldı.\n\n"
+            f"📌 **Kaldırılan Rol:** `{rol.name}`\n"
+            f"🛠️ **İşlemi Yapan:** `{islemi_yapan}`"
+        )
+        embed = discord.Embed(description=metin, color=discord.Color.red())
+        await kanal.send(embed=embed)
 
 
 # --- WEB PANELİ (FLASK) ---
@@ -185,6 +235,14 @@ SERVER_HTML = """
                 {% endfor %}
             </select>
 
+            <label>Rol Log Kanalı:</label>
+            <select name="log_kanal_id">
+                <option value="">-- Kanal Seçilmedi --</option>
+                {% for channel in guild.text_channels %}
+                    <option value="{{ channel.id }}" {% if current_settings.get('log_kanal_id')|string == channel.id|string %}selected{% endif %}>#{{ channel.name }}</option>
+                {% endfor %}
+            </select>
+
             <label>Hoş Geldin & Ayrılış Kanalı:</label>
             <select name="hosgeldin_kanal_id">
                 <option value="">-- Kanal Seçilmedi --</option>
@@ -216,6 +274,7 @@ def server_settings(guild_id):
         SERVER_SETTINGS[guild_id] = {
             "name": guild.name,
             "otorol_id": "",
+            "log_kanal_id": "",
             "hosgeldin_kanal_id": ""
         }
 
@@ -223,6 +282,7 @@ def server_settings(guild_id):
     if request.method == "POST":
         SERVER_SETTINGS[guild_id]["name"] = guild.name
         SERVER_SETTINGS[guild_id]["otorol_id"] = request.form.get("otorol_id")
+        SERVER_SETTINGS[guild_id]["log_kanal_id"] = request.form.get("log_kanal_id")
         SERVER_SETTINGS[guild_id]["hosgeldin_kanal_id"] = request.form.get("hosgeldin_kanal_id")
         
         verileri_kaydet()
@@ -236,3 +296,4 @@ def run_flask():
 if __name__ == "__main__":
     threading.Thread(target=run_flask, daemon=True).start()
     bot.run(os.environ.get("TOKEN"))
+    
