@@ -5,151 +5,68 @@ import threading
 import json
 import os
 
-# --- VERİLERİ GÜVENLİ DOSYADA SAKLAMA ---
-DOSYA_YOLU = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ayarlar.json")
+# --- AYARLAR ---
+DOSYA_YOLU = "ayarlar.json"
+SERVER_SETTINGS = {}
 
 def verileri_yukle():
+    global SERVER_SETTINGS
     if os.path.exists(DOSYA_YOLU):
-        try:
-            with open(DOSYA_YOLU, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                return {int(k): v for k, v in data.items()}
-        except:
-            return {}
-    return {}
+        with open(DOSYA_YOLU, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            SERVER_SETTINGS = {int(k): v for k, v in data.items()}
 
 def verileri_kaydet():
-    try:
-        with open(DOSYA_YOLU, "w", encoding="utf-8") as f:
-            json.dump(SERVER_SETTINGS, f, ensure_ascii=False, indent=4)
-    except Exception as e:
-        print("Kayıt hatası:", e)
+    with open(DOSYA_YOLU, "w", encoding="utf-8") as f:
+        json.dump(SERVER_SETTINGS, f, ensure_ascii=False, indent=4)
 
-# --- 1. DİSCORD BOTU AYARLARI ---
+# --- BOT ---
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
-intents.guilds = True
-intents.moderation = True
-
 bot = commands.Bot(command_prefix="!", intents=intents)
-
-# Ayarları dosyadan yüklüyoruz
-SERVER_SETTINGS = verileri_yukle()
 
 @bot.event
 async def on_ready():
-    for guild in bot.guilds:
-        if guild.id not in SERVER_SETTINGS:
-            SERVER_SETTINGS[guild.id] = {
-                "name": guild.name,
-                "otorol_id": None,
-                "log_kanal_id": None
-            }
-    verileri_kaydet()
-    print(f"Bot aktif: {bot.user}")
+    verileri_yukle()
+    print("Bot hazır!")
 
-@bot.event
-async def on_guild_join(guild):
-    if guild.id not in SERVER_SETTINGS:
-        SERVER_SETTINGS[guild.id] = {
-            "name": guild.name,
-            "otorol_id": None,
-            "log_kanal_id": None
-        }
-        verileri_kaydet()
-
-@bot.event
-async def on_member_join(member):
-    guild_id = member.guild.id
-    settings = SERVER_SETTINGS.get(guild_id)
-    if not settings or not settings.get("otorol_id"):
-        return
-    
-    rol_id = settings["otorol_id"]
-    rol = member.guild.get_role(rol_id)
-    if rol:
-        try:
-            await member.add_roles(rol)
-        except:
-            pass
-
-
-# --- DETAYLI ROL LOG SİSTEMİ ---
-@bot.event
-async def on_member_update(before, after):
-    guild_id = after.guild.id
-    settings = SERVER_SETTINGS.get(guild_id)
-    if not settings or not settings.get("log_kanal_id"):
-        return
-        
-    log_id = settings["log_kanal_id"]
-    kanal = after.guild.get_channel(log_id)
-    if not kanal:
-        return
-
-    eklenen_roller = [r for r in after.roles if r not in before.roles]
-    kaldirilan_roller = [r for r in before.roles if r not in after.roles]
-
-    if not eklenen_roller and not kaldirilan_roller:
-        return
-
-    yetkili = "Bilinmiyor"
-    try:
-        async for entry in after.guild.audit_logs(limit=3, action=discord.AuditLogAction.member_role_update):
-            if entry.target.id == after.id:
-                yetkili = entry.user.mention
-                break
-    except:
-        pass
-
-    avatar_url = after.avatar.url if after.avatar else after.default_avatar.url
-
-    for rol in eklenen_roller:
-        embed = discord.Embed(color=discord.Color.green())
-        embed.set_author(name=f"{after.name} ({after.display_name})", icon_url=avatar_url)
-        embed.description = f"🟢 **{after.mention}** adlı kullanıcıya bir rol eklendi.\n\n" \
-                            f"📌 **Eklenen Rol:** {rol.mention}\n" \
-                            f"🛠️ **İşlemi Yapan:** {yetkili}"
-        await kanal.send(embed=embed)
-
-    for rol in kaldirilan_roller:
-        embed = discord.Embed(color=discord.Color.red())
-        embed.set_author(name=f"{after.name} ({after.display_name})", icon_url=avatar_url)
-        embed.description = f"🔴 **{after.mention}** adlı kullanıcından bir rol kaldırıldı.\n\n" \
-                            f"📌 **Kaldırılan Rol:** {rol.mention}\n" \
-                            f"🛠️ **İşlemi Yapan:** {yetkili}"
-        await kanal.send(embed=embed)
-
-
-# --- DİSCORD MODERASYON KOMUTLARI ---
-
-@bot.command()
-@commands.has_permissions(ban_members=True)
-async def ban(ctx, member: discord.Member, *, reason=None):
-    try:
-        await member.ban(reason=reason)
-        await ctx.send(f"🔨 **{member.mention}** başarıyla yasaklandı.")
-    except:
-        await ctx.send(f"❌ Yasaklama başarısız!")
-
-@ban.error
-async def ban_error(ctx, error):
-    if isinstance(error, commands.MissingPermissions):
-        await ctx.send("❌ Yetkin yok.")
-
-# --- WEB PANELİ ---
+# --- WEB PANELİ (FLASK) ---
 app = Flask(__name__)
-app.secret_key = "gizli123"
+app.secret_key = "cok_gizli_anahtar"
+
+LOGIN_HTML = """
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Giriş</title>
+    <style>body { background: #313338; color: white; text-align: center; padding-top: 50px; font-family: sans-serif; }</style>
+</head>
+<body>
+    <h2>Bot Paneli Giriş</h2>
+    <form method="POST">
+        <input type="password" name="sifre" placeholder="Şifre (admin123)" required>
+        <button type="submit">Giriş Yap</button>
+    </form>
+</body>
+</html>
+"""
+
+@app.route("/", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        if request.form.get("sifre") == "admin123":
+            session["giris"] = True
+            return "Giriş başarılı! Bot ayarlarını yakında buraya ekleyeceğiz."
+    return render_template_string(LOGIN_HTML)
 
 def run_flask():
-    app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
+    app.run(host="0.0.0.0", port=10000)
 
 if __name__ == "__main__":
-    t = threading.Thread(target=run_flask)
-    t.daemon = True
-    t.start()
-
-    # BURAYI DÜZELTTİM:
+    # Flask'i başlat
+    threading.Thread(target=run_flask, daemon=True).start()
+    # Botu başlat
     bot.run(os.environ.get("TOKEN"))
     
