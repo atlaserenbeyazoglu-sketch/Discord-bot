@@ -194,8 +194,7 @@ async def duyuru(interaction: discord.Interaction, kanal: discord.TextChannel, *
     embed.set_footer(text=f"Gönderen: {interaction.user.name}")
     await kanal.send(embed=embed)
     await interaction.response.send_message("✅ Duyuru başarıyla gönderildi.", ephemeral=True)
-
-# --- BİLGİ & DİĞER KOMUTLAR ---
+     # --- BİLGİ & DİĞER KOMUTLAR ---
 @bot.tree.command(name="sunucubilgi", description="Sunucu hakkında detaylı bilgi gösterir")
 async def sunucubilgi(interaction: discord.Interaction):
     g = interaction.guild
@@ -340,4 +339,74 @@ async def temizlebot(interaction: discord.Interaction):
         return await hata_mesaji(interaction, "Mesajları yönet yetkiniz yok.")
     await interaction.response.defer(ephemeral=True)
     silinenler = await interaction.channel.purge(limit=50, check=lambda m: m.author.bot)
-    await interaction.followup.send(f"🧹 Toplam {len(silinenler)} adet b
+    await interaction.followup.send(f"🧹 Toplam {len(silinenler)} adet bot mesajı temizlendi.", ephemeral=True)
+
+@bot.tree.command(name="roller", description="Sunucudaki rolleri listeler")
+async def roller(interaction: discord.Interaction):
+    r = [x.name for x in interaction.guild.roles if x.name != "@everyone"]
+    await interaction.response.send_message(f"📜 Sunucudaki Roller:\n" + (", ".join(r[:20]) if r else "Rol bulunmuyor."))
+
+@bot.tree.command(name="kanallar", description="Sunucudaki kanalları listeler")
+async def kanallar(interaction: discord.Interaction):
+    c = [x.name for x in interaction.guild.text_channels]
+    await interaction.response.send_message(f"📁 Sunucudaki Metin Kanalları:\n" + (", ".join(c[:20]) if c else "Kanal bulunmuyor."))
+
+# --- ÜYE ETKİNLİKLERİ ---
+@bot.event
+async def on_member_join(member):
+    s = SET.get(member.guild.id, {})
+    if s.get("otorol_id"):
+        rol = member.guild.get_role(int(s["otorol_id"]))
+        if rol:
+            try:
+                await member.add_roles(rol)
+            except:
+                pass
+    if s.get("hosgeldin_kanal_id"):
+        kanal = member.guild.get_channel(int(s["hosgeldin_kanal_id"]))
+        if kanal:
+            try:
+                await kanal.send(f"Hoş geldin {member.mention}! Seninle birlikte **{member.guild.member_count}** kişi olduk.")
+            except:
+                pass
+
+@bot.event
+async def on_member_remove(member):
+    s = SET.get(member.guild.id, {})
+    if s.get("hosgeldin_kanal_id"):
+        kanal = member.guild.get_channel(int(s["hosgeldin_kanal_id"]))
+        if kanal:
+            try:
+                await kanal.send(f"**{member.name}** sunucumuzdan ayrıldı.")
+            except:
+                pass
+
+# --- WEB PANELİ (FLASK) ---
+app = Flask(__name__)
+
+INDEX_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Panel</title><style>body{background:#2b2d31;color:#fff;font-family:sans-serif;padding:20px;}.box{max-width:500px;margin:auto;background:#313338;padding:20px;border-radius:8px;}.card{background:#111;padding:12px;margin-bottom:10px;border-radius:6px;display:flex;justify-content:space-between;align-items:center;}.btn{background:#5865f2;color:#fff;padding:8px 14px;border-radius:4px;text-decoration:none;font-weight:bold;}</style></head><body><div class="box"><h2>🤖 Sunucu Seç</h2>{% for g in guilds %}<div class="card"><span>📢 {{g.name}}</span><a href="/server/{{g.id}}" class="btn">Yönet</a></div>{% endfor %}</div></body></html>"""
+
+SERVER_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Ayarlar</title><style>body{background:#2b2d31;color:#fff;font-family:sans-serif;padding:20px;}.box{max-width:500px;margin:auto;background:#313338;padding:20px;border-radius:8px;}select,button{width:100%;padding:10px;margin:10px 0;background:#1e1f22;color:#fff;border:1px solid #444;border-radius:5px;}button{background:#5865f2;font-weight:bold;cursor:pointer;}.back{display:block;margin-bottom:15px;color:#00aff4;text-decoration:none;}</style></head><body><div class="box"><a href="/" class="back">⬅️ Geri</a><h2>⚙️ {{g.name}}</h2><form method="POST"><label>Otorol:</label><select name="otorol_id"><option value="">-- Seçilmedi --</option>{% for r in g.roles %}{% if r.name != "@everyone" %}<option value="{{r.id}}" {% if set.get('otorol_id')|string == r.id|string %}selected{% endif %}>{{r.name}}</option>{% endif %}{% endfor %}</select><label>Hoş Geldin Kanalı:</label><select name="hosgeldin_kanal_id"><option value="">-- Seçilmedi --</option>{% for c in g.text_channels %}<option value="{{c.id}}" {% if set.get('hosgeldin_kanal_id')|string == c.id|string %}selected{% endif %}>#{{c.name}}</option>{% endfor %}</select><button type="submit">Kaydet</button></form></div></body></html>"""
+
+@app.route("/")
+def index():
+    yukle()
+    return render_template_string(INDEX_H, guilds=bot.guilds)
+
+@app.route("/server/<int:gid>", methods=["GET", "POST"])
+def server(gid):
+    yukle()
+    g = bot.get_guild(gid)
+    if not g:
+        return "Bulunamadı", 404
+    SET.setdefault(gid, {"name": g.name, "otorol_id": "", "hosgeldin_kanal_id": ""})
+    if request.method == "POST":
+        SET[gid]["otorol_id"] = request.form.get("otorol_id")
+        SET[gid]["hosgeldin_kanal_id"] = request.form.get("hosgeldin_kanal_id")
+        kaydet()
+    return render_template_string(SERVER_H, g=g, set=SET[gid])
+
+if __name__ == "__main__":
+    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=10000), daemon=True).start()
+    bot.run("TOKEN")
+        
