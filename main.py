@@ -3,7 +3,6 @@ import json
 import os
 import datetime
 import threading
-import asyncio
 
 from discord.ext import commands
 from discord import app_commands
@@ -16,92 +15,63 @@ from flask import Flask, render_template_string, request, redirect, url_for
 
 DOSYA = "ayarlar.json"
 
-SET = {}
-
-# JSON ile Flask/Discord aynı anda çalıştığı için kilit
-SET_LOCK = threading.RLock()
-
 # Render Environment Variables
+TOKEN = os.environ.get("TOKEN")
 PANEL_PASSWORD = os.environ.get("PANEL_PASSWORD", "2904")
 
-# Render kendi adresini otomatik kullanır
-PANEL_URL = os.environ.get(
-    "RENDER_EXTERNAL_URL",
-    "http://127.0.0.1:10000"
-)
+PANEL_URL = "https://discord-bot-fa6e.onrender.com/"
+
+SET = {}
 
 
 # =========================================================
-# VARSAYILAN SUNUCU AYARLARI
+# JSON SİSTEMİ
 # =========================================================
 
-def varsayilan_ayarlar(guild=None):
+def varsayilan_ayarlar(guild):
     return {
-        "name": guild.name if guild else "",
+        "name": guild.name,
         "otorol_id": "",
         "hosgeldin_kanal_id": "",
         "log_kanal_id": ""
     }
 
 
-# =========================================================
-# JSON YÜKLEME
-# =========================================================
-
 def yukle():
     global SET
 
     if not os.path.exists(DOSYA):
+        SET = {}
         return
 
     try:
         with open(DOSYA, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        with SET_LOCK:
-            SET = {
-                int(k): v
-                for k, v in data.items()
-            }
+        SET = {
+            int(k): v
+            for k, v in data.items()
+        }
 
     except Exception as e:
-        print(f"⚠️ Ayarlar yüklenirken hata: {e}")
+        print(f"⚠️ Ayarlar yüklenemedi: {e}")
+        SET = {}
 
-
-# =========================================================
-# JSON KAYDETME
-# =========================================================
 
 def kaydet():
     try:
-        with SET_LOCK:
-
-            gecici_dosya = DOSYA + ".tmp"
-
-            with open(
-                gecici_dosya,
-                "w",
-                encoding="utf-8"
-            ) as f:
-
-                json.dump(
-                    SET,
-                    f,
-                    ensure_ascii=False,
-                    indent=4
-                )
-
-            # Dosyanın yarım kalmasını engeller
-            os.replace(
-                gecici_dosya,
-                DOSYA
+        with open(DOSYA, "w", encoding="utf-8") as f:
+            json.dump(
+                SET,
+                f,
+                ensure_ascii=False,
+                indent=4
             )
 
     except Exception as e:
-        print(f"⚠️ Ayarlar kaydedilirken hata: {e}")
+        print(f"⚠️ Ayarlar kaydedilemedi: {e}")
 
 
-# Başlangıçta ayarları yükle
 yukle()
 
 
@@ -118,74 +88,49 @@ bot = commands.Bot(
 
 
 # =========================================================
-# BOT HAZIR
+# BOT READY
 # =========================================================
 
 @bot.event
 async def on_ready():
 
-    with SET_LOCK:
+    yukle()
 
-        for guild in bot.guilds:
+    for guild in bot.guilds:
 
-            SET.setdefault(
-                guild.id,
-                varsayilan_ayarlar(guild)
-            )
+        SET.setdefault(
+            guild.id,
+            varsayilan_ayarlar(guild)
+        )
 
-            SET[guild.id]["name"] = guild.name
+        SET[guild.id]["name"] = guild.name
 
     kaydet()
 
     try:
 
-        await bot.tree.sync()
+        synced = await bot.tree.sync()
 
         print(
-            "✅ Slash komutları başarıyla senkronize edildi."
+            f"✅ {len(synced)} slash komutu senkronize edildi."
         )
 
     except Exception as e:
 
         print(
-            f"❌ Slash komut sync hatası: {e}"
+            f"❌ Slash komut senkronizasyon hatası: {e}"
         )
 
-    print(
-        f"🤖 Bot aktif: {bot.user} | ID: {bot.user.id}"
-    )
-
-    print(
-        f"📡 Bağlı sunucu sayısı: {len(bot.guilds)}"
-    )
-
-    print(
-        "--------------------------------------------------"
-    )
-
-    print(
-        "🌐 WEB PANELİ AKTİF"
-    )
-
-    print(
-        "🔄 AUTO RECONNECT AKTİF"
-    )
-
-    print(
-        "💓 WATCHDOG AKTİF"
-    )
-
-    print(
-        "🛡️ HEALTH CHECK AKTİF"
-    )
-
-    print(
-        "--------------------------------------------------"
-    )
+    print("--------------------------------------------------")
+    print(f"🤖 Bot aktif: {bot.user}")
+    print(f"🆔 Bot ID: {bot.user.id}")
+    print("🔄 Discord bağlantısı hazır.")
+    print("🌐 Web paneli hazır.")
+    print("--------------------------------------------------")
 
 
 # =========================================================
-# MESAJ DİNLEYİCİ
+# MESAJ SİSTEMİ
 # =========================================================
 
 @bot.event
@@ -212,13 +157,10 @@ async def on_message(message):
 
 
 # =========================================================
-# YETKİ KONTROL
+# YETKİ SİSTEMİ
 # =========================================================
 
-def yetki_kontrol(
-    interaction,
-    perm
-):
+def yetki_kontrol(interaction, perm):
 
     return bool(
         getattr(
@@ -229,14 +171,7 @@ def yetki_kontrol(
     )
 
 
-# =========================================================
-# HATA MESAJI
-# =========================================================
-
-async def hata_mesaji(
-    interaction,
-    metin
-):
+async def hata_mesaji(interaction, metin):
 
     try:
 
@@ -254,8 +189,11 @@ async def hata_mesaji(
                 ephemeral=True
             )
 
-    except Exception:
-        pass
+    except Exception as e:
+
+        print(
+            f"⚠️ Hata mesajı gönderilemedi: {e}"
+        )
 
 
 # =========================================================
@@ -264,16 +202,14 @@ async def hata_mesaji(
 
 @bot.tree.command(
     name="panel",
-    description="Web kontrol panelini açar."
+    description="Web kontrol panelini gönderir."
 )
-async def panel(
-    interaction: discord.Interaction
-):
+async def panel(interaction: discord.Interaction):
 
     embed = discord.Embed(
         title="🌐 Gelişmiş Bot Kontrol Paneli",
         description=(
-            "Sunucu ayarlarını yönetmek için panel:\n"
+            "Sunucu ayarlarını yönetmek için panel:\n\n"
             f"{PANEL_URL}"
         ),
         color=0x5865F2
@@ -291,33 +227,28 @@ async def panel(
 
 @bot.tree.command(
     name="komutlar",
-    description="Sunucudaki bot komutlarını gösterir."
+    description="Botun aktif komutlarını gösterir."
 )
-async def komutlar(
-    interaction: discord.Interaction
-):
+async def komutlar(interaction: discord.Interaction):
 
     embed = discord.Embed(
         title="📜 Bot Komut Listesi",
-        description=(
-            "Aşağıdan mevcut bot komutlarını "
-            "inceleyebilirsin:"
-        ),
+        description="Aktif yönetim komutları:",
         color=0x5865F2
     )
 
     embed.add_field(
-        name="🛠️ Yönetim ve Moderasyon",
+        name="🛠️ Yönetim",
         value=(
-            "**/komutlar** - Komut listesini gösterir.\n"
-            "**/panel** - Web panelini açar.\n"
-            "**/sunucu-kur** - Sunucu yapısını kurar.\n"
-            "**/sil** - Mesajları temizler.\n"
-            "**/kanalayazmaerişimi** - Rol yazma izinlerini ayarlar.\n"
-            "**/mute** - Kullanıcıya zaman aşımı uygular.\n"
-            "**/unmute** - Zaman aşımını kaldırır.\n"
-            "**/yavaşmod** - Kanalın yavaş modunu ayarlar.\n"
-            "**/kanalgörünülürlük** - Kanal görünürlüğünü ayarlar."
+            "**/komutlar** — Komut listesini gösterir.\n"
+            "**/panel** — Web kontrol panelini açar.\n"
+            "**/sunucu-kur** — Sunucu kategorilerini oluşturur.\n"
+            "**/sil** — Mesajları temizler.\n"
+            "**/kanalayazma** — Roller için yazma izni ayarlar.\n"
+            "**/mute** — Kullanıcıya zaman aşımı uygular.\n"
+            "**/unmute** — Zaman aşımını kaldırır.\n"
+            "**/yavasmod** — Kanalın yavaş modunu ayarlar.\n"
+            "**/kanalgorunurluk** — Roller için kanal görünürlüğünü ayarlar."
         ),
         inline=False
     )
@@ -329,93 +260,80 @@ async def komutlar(
 
 
 # =========================================================
-# ROL DEĞİŞİKLİĞİ LOG SİSTEMİ
+# ROL LOG SİSTEMİ
 # =========================================================
 
 @bot.event
-async def on_member_update(
-    before,
-    after
-):
+async def on_member_update(before, after):
 
     if before.roles == after.roles:
         return
 
-    with SET_LOCK:
+    guild = after.guild
 
-        s = dict(
-            SET.get(
-                after.guild.id,
-                {}
-            )
-        )
+    yukle()
 
-    log_kanal_id = s.get(
+    settings = SET.get(
+        guild.id,
+        {}
+    )
+
+    log_id = settings.get(
         "log_kanal_id"
     )
 
-    if not log_kanal_id:
+    if not log_id:
         return
 
     try:
 
-        log_kanali = after.guild.get_channel(
-            int(log_kanal_id)
+        log_channel = guild.get_channel(
+            int(log_id)
         )
 
-    except (
-        ValueError,
-        TypeError
-    ):
+    except Exception:
 
         return
 
-    if not log_kanali:
+    if not log_channel:
         return
 
-    islem_yapan = (
-        "Bilinmiyor / Otomatik"
-    )
+    executor = "Bilinmiyor / Otomatik"
 
     try:
 
-        async for entry in after.guild.audit_logs(
+        async for entry in guild.audit_logs(
             limit=5,
             action=discord.AuditLogAction.member_role_update
         ):
 
             if (
                 entry.target
-                and
-                entry.target.id == after.id
+                and entry.target.id == after.id
             ):
 
-                islem_yapan = (
-                    entry.user.mention
-                )
-
+                executor = entry.user.mention
                 break
 
     except Exception:
+
         pass
 
-    eklenen_roller = [
-        rol
-        for rol in after.roles
-        if rol not in before.roles
+    added_roles = [
+        role
+        for role in after.roles
+        if role not in before.roles
     ]
 
-    alinan_roller = [
-        rol
-        for rol in before.roles
-        if rol not in after.roles
+    removed_roles = [
+        role
+        for role in before.roles
+        if role not in after.roles
     ]
 
-    # -------------------------
-    # ROL VERİLDİ
-    # -------------------------
+    # VERİLEN ROLLER
 
-    for rol in eklenen_roller:
+    for role in added_roles:
 
         embed = discord.Embed(
             title="✅ Rol Verildi",
@@ -426,37 +344,36 @@ async def on_member_update(
         )
 
         embed.add_field(
-            name="Rol Verilen Kullanıcı",
+            name="Kullanıcı",
             value=after.mention,
             inline=False
         )
 
         embed.add_field(
             name="Verilen Rol",
-            value=rol.mention,
+            value=role.mention,
             inline=False
         )
 
         embed.add_field(
-            name="Rolü Veren",
-            value=islem_yapan,
+            name="İşlemi Yapan",
+            value=executor,
             inline=False
         )
 
         try:
 
-            await log_kanali.send(
+            await log_channel.send(
                 embed=embed
             )
 
         except Exception:
+
             pass
 
-    # -------------------------
-    # ROL ALINDI
-    # -------------------------
+    # ALINAN ROLLER
 
-    for rol in alinan_roller:
+    for role in removed_roles:
 
         embed = discord.Embed(
             title="⚠️ Rol Alındı",
@@ -467,30 +384,31 @@ async def on_member_update(
         )
 
         embed.add_field(
-            name="Rolü Alınan Kullanıcı",
+            name="Kullanıcı",
             value=after.mention,
             inline=False
         )
 
         embed.add_field(
             name="Alınan Rol",
-            value=rol.name,
+            value=role.name,
             inline=False
         )
 
         embed.add_field(
-            name="Rolü Alan",
-            value=islem_yapan,
+            name="İşlemi Yapan",
+            value=executor,
             inline=False
         )
 
         try:
 
-            await log_kanali.send(
+            await log_channel.send(
                 embed=embed
             )
 
         except Exception:
+
             pass
 
 
@@ -500,7 +418,7 @@ async def on_member_update(
 
 @bot.tree.command(
     name="sunucu-kur",
-    description="Kategorileri ve kanalları oluşturur."
+    description="Sunucu kategorilerini ve kanallarını oluşturur."
 )
 async def sunucu_kur(
     interaction: discord.Interaction
@@ -513,7 +431,7 @@ async def sunucu_kur(
 
         return await hata_mesaji(
             interaction,
-            "Kanal yönetme yetkiniz yok!"
+            "Kanal yönetme yetkiniz yok."
         )
 
     await interaction.response.defer()
@@ -523,100 +441,105 @@ async def sunucu_kur(
     if guild is None:
 
         return await interaction.followup.send(
-            "❌ Bu komut sadece sunucularda kullanılabilir."
+            "❌ Bu komut sadece sunucuda kullanılabilir."
         )
+
+    kategoriler = [
+
+        (
+            "「📌」Önemli",
+            [
+                "❓biz-kimiz",
+                "❓görevlerimiz",
+                "⬛kara-liste",
+                "🚪gelen-giden",
+                "👔kılık-kıyafet"
+            ]
+        ),
+
+        (
+            "「📢」Duyuru",
+            [
+                "📢personel-duyuru",
+                "📢aktiflik-duyuru",
+                "📢operasyon-duyuru",
+                "📜kararname",
+                "📋hiyerarşi"
+            ]
+        ),
+
+        (
+            "「🗨」Sohbet Kanalları",
+            [
+                "🗨sohbet",
+                "📸galeri-kanalı",
+                "🤖bot-komut",
+                "🤔öneri-istek",
+                "📤i̇stifa-i̇zin",
+                "😴inaktiflik-izin"
+            ]
+        ),
+
+        (
+            "「🧾」Kayıtlar",
+            [
+                "🧾alım-logs",
+                "🧾alım-sistemi",
+                "🧾eğitim-logs",
+                "🧾eğitim-sistemi"
+            ]
+        )
+
+    ]
+
+    created = 0
 
     try:
 
-        yapilar = [
+        for category_name, channels in kategoriler:
 
-            (
-                "「📌」Önemli",
-                [
-                    "❓biz-kimiz",
-                    "❓görevlerimiz",
-                    "⬛kara-liste",
-                    "🚪gelen-giden",
-                    "👔kılık-kıyafet"
-                ]
-            ),
-
-            (
-                "「📢」Duyuru",
-                [
-                    "📢personel-duyuru",
-                    "📢aktiflik-duyuru",
-                    "📢operasyon-duyuru",
-                    "📜kararname",
-                    "📋hiyerarşi"
-                ]
-            ),
-
-            (
-                "「🗨」Sohbet Kanalları",
-                [
-                    "🗨sohbet",
-                    "📸galeri-kanalı",
-                    "🤖bot-komut",
-                    "🤔öneri-istek",
-                    "📤i̇stifa-i̇zin",
-                    "😴inaktiflik-izin"
-                ]
-            ),
-
-            (
-                "「🧾」Kayıtlar",
-                [
-                    "🧾alım-logs",
-                    "🧾alım-sistemi",
-                    "🧾eğitim-logs",
-                    "🧾eğitim-sistemi"
-                ]
+            category = await guild.create_category(
+                category_name
             )
 
-        ]
-
-        for kategori_adi, kanallar in yapilar:
-
-            kategori = await guild.create_category(
-                kategori_adi
-            )
-
-            for kanal_adi in kanallar:
+            for channel_name in channels:
 
                 await guild.create_text_channel(
-                    kanal_adi,
-                    category=kategori
+                    channel_name,
+                    category=category
                 )
 
+                created += 1
+
         await interaction.followup.send(
-            "✅ **Sistem başarıyla kuruldu!**\n"
-            "Tüm kategoriler ve kanallar oluşturuldu."
+            "✅ **Sunucu kurulumu tamamlandı!**\n\n"
+            f"📁 Kategori: **{len(kategoriler)}**\n"
+            f"📋 Kanal: **{created}**"
         )
 
     except discord.Forbidden:
 
         await interaction.followup.send(
-            "❌ Botun kategori veya kanal oluşturma yetkisi yok."
+            "❌ Botun kanal/kategori oluşturma yetkisi yok."
         )
 
     except Exception as e:
 
         await interaction.followup.send(
-            f"❌ Kurulum sırasında hata oluştu:\n`{e}`"
+            f"❌ Kurulum hatası:\n`{e}`"
         )
 
 
 # =========================================================
-# MESAJ SİL
+# SİL
 # =========================================================
 
 @bot.tree.command(
     name="sil",
-    description="Belirtilen miktarda mesajı temizler."
+    description="Mesajları temizler."
 )
 @app_commands.describe(
-    limit="Silinecek mesaj sayısı (1-100)"
+    limit="1 ile 100 arasında mesaj sayısı"
 )
 async def sil(
     interaction: discord.Interaction,
@@ -630,10 +553,10 @@ async def sil(
 
         return await hata_mesaji(
             interaction,
-            "Mesajları yönet yetkiniz bulunmuyor."
+            "Mesajları yönetme yetkiniz yok."
         )
 
-    if not 1 <= limit <= 100:
+    if limit < 1 or limit > 100:
 
         return await hata_mesaji(
             interaction,
@@ -646,12 +569,12 @@ async def sil(
 
     try:
 
-        silinenler = await interaction.channel.purge(
+        deleted = await interaction.channel.purge(
             limit=limit
         )
 
         await interaction.followup.send(
-            f"🧹 Başarıyla **{len(silinenler)}** mesaj silindi.",
+            f"🧹 **{len(deleted)}** mesaj silindi.",
             ephemeral=True
         )
 
@@ -665,21 +588,21 @@ async def sil(
     except Exception as e:
 
         await interaction.followup.send(
-            f"❌ İşlem başarısız: `{e}`",
+            f"❌ Hata: `{e}`",
             ephemeral=True
         )
 
 
 # =========================================================
-# KANALA YAZMA ERİŞİMİ
+# KANALA YAZMA
 # =========================================================
 
 @bot.tree.command(
-    name="kanalayazmaerişimi",
+    name="kanalayazma",
     description="Rollerin kanala yazma iznini ayarlar."
 )
 @app_commands.describe(
-    durum="True: Yazabilsin, False: Yazamasın",
+    durum="True: yazabilsin / False: yazamasın",
     rol1="1. Rol",
     rol2="2. Rol",
     rol3="3. Rol",
@@ -691,7 +614,7 @@ async def sil(
     rol9="9. Rol",
     rol10="10. Rol"
 )
-async def kanalayazmaerişimi(
+async def kanalayazma(
     interaction: discord.Interaction,
     durum: bool,
     rol1: discord.Role = None,
@@ -713,12 +636,12 @@ async def kanalayazmaerişimi(
 
         return await hata_mesaji(
             interaction,
-            "Kanalları yönet yetkiniz yok."
+            "Kanalları yönetme yetkiniz yok."
         )
 
     roller = [
-        r
-        for r in [
+        role
+        for role in [
             rol1,
             rol2,
             rol3,
@@ -730,7 +653,7 @@ async def kanalayazmaerişimi(
             rol9,
             rol10
         ]
-        if r is not None
+        if role is not None
     ]
 
     if not roller:
@@ -742,19 +665,19 @@ async def kanalayazmaerişimi(
 
     try:
 
-        for rol in roller:
+        for role in roller:
 
             await interaction.channel.set_permissions(
-                rol,
+                role,
                 send_messages=durum
             )
 
-        isimler = ", ".join(
-            f"**{r.name}**"
-            for r in roller
+        names = ", ".join(
+            f"**{role.name}**"
+            for role in roller
         )
 
-        durum_metni = (
+        status = (
             "açıldı ✍️"
             if durum
             else
@@ -762,8 +685,8 @@ async def kanalayazmaerişimi(
         )
 
         await interaction.response.send_message(
-            f"⚙️ {isimler} rollerinin "
-            f"yazma izni **{durum_metni}**."
+            f"⚙️ {names} rollerinin yazma izni "
+            f"**{status}**."
         )
 
     except discord.Forbidden:
@@ -790,13 +713,13 @@ async def kanalayazmaerişimi(
     description="Kullanıcıya zaman aşımı uygular."
 )
 @app_commands.describe(
-    üye="Susturulacak üye",
+    uye="Susturulacak üye",
     saat="Süre (saat)",
     sebep="Susturma sebebi"
 )
 async def mute(
     interaction: discord.Interaction,
-    üye: discord.Member,
+    uye: discord.Member,
     saat: int = 1,
     sebep: str = "Belirtilmedi"
 ):
@@ -808,10 +731,10 @@ async def mute(
 
         return await hata_mesaji(
             interaction,
-            "Üyeleri susturma yetkiniz yok."
+            "Üyeleri zaman aşımına alma yetkiniz yok."
         )
 
-    if not 1 <= saat <= 672:
+    if saat < 1 or saat > 672:
 
         return await hata_mesaji(
             interaction,
@@ -820,16 +743,14 @@ async def mute(
 
     try:
 
-        await üye.timeout(
-            datetime.timedelta(
-                hours=saat
-            ),
+        await uye.timeout(
+            datetime.timedelta(hours=saat),
             reason=sebep
         )
 
         await interaction.response.send_message(
-            f"🔇 **{üye.name}** adlı kullanıcı "
-            f"**{saat} saat** süreyle susturuldu.\n"
+            f"🔇 **{uye.display_name}** adlı kullanıcı "
+            f"**{saat} saat** susturuldu.\n"
             f"📝 Sebep: `{sebep}`"
         )
 
@@ -837,17 +758,199 @@ async def mute(
 
         await hata_mesaji(
             interaction,
-            "Bu kullanıcıya zaman aşımı uygulayamıyorum. "
-            "Rol hiyerarşisini ve bot yetkilerini kontrol edin."
+            "Bu kullanıcıya zaman aşımı uygulayamıyorum."
         )
 
     except Exception as e:
 
         await hata_mesaji(
             interaction,
-            f"İşlem başarısız: `{e}`"
+            f"Hata: `{e}`"
         )
 
 
 # =========================================================
-#
+# UNMUTE
+# =========================================================
+
+@bot.tree.command(
+    name="unmute",
+    description="Kullanıcının zaman aşımını kaldırır."
+)
+@app_commands.describe(
+    uye="Susturması kaldırılacak üye"
+)
+async def unmute(
+    interaction: discord.Interaction,
+    uye: discord.Member
+):
+
+    if not yetki_kontrol(
+        interaction,
+        "moderate_members"
+    ):
+
+        return await hata_mesaji(
+            interaction,
+            "Üyeleri yönetme yetkiniz yok."
+        )
+
+    try:
+
+        await uye.timeout(None)
+
+        await interaction.response.send_message(
+            f"🔊 **{uye.display_name}** adlı kullanıcının "
+            "susturması kaldırıldı."
+        )
+
+    except discord.Forbidden:
+
+        await hata_mesaji(
+            interaction,
+            "Bu kullanıcının zaman aşımını kaldıramıyorum."
+        )
+
+    except Exception as e:
+
+        await hata_mesaji(
+            interaction,
+            f"Hata: `{e}`"
+        )
+
+
+# =========================================================
+# YAVAŞ MOD
+# =========================================================
+
+@bot.tree.command(
+    name="yavasmod",
+    description="Kanalın yavaş modunu ayarlar."
+)
+@app_commands.describe(
+    saniye="0 ile 21600 arasında saniye. 0 kapatır."
+)
+async def yavasmod(
+    interaction: discord.Interaction,
+    saniye: int
+):
+
+    if not yetki_kontrol(
+        interaction,
+        "manage_channels"
+    ):
+
+        return await hata_mesaji(
+            interaction,
+            "Kanalı yönetme yetkiniz yok."
+        )
+
+    if saniye < 0 or saniye > 21600:
+
+        return await hata_mesaji(
+            interaction,
+            "Süre 0 ile 21600 saniye arasında olmalıdır."
+        )
+
+    try:
+
+        await interaction.channel.edit(
+            slowmode_delay=saniye
+        )
+
+        if saniye == 0:
+
+            await interaction.response.send_message(
+                "⏳ Yavaş mod kapatıldı."
+            )
+
+        else:
+
+            await interaction.response.send_message(
+                f"⏳ Yavaş mod **{saniye} saniye** olarak ayarlandı."
+            )
+
+    except discord.Forbidden:
+
+        await hata_mesaji(
+            interaction,
+            "Botun kanal yönetme yetkisi yok."
+        )
+
+    except Exception as e:
+
+        await hata_mesaji(
+            interaction,
+            f"Hata: `{e}`"
+        )
+
+
+# =========================================================
+# KANAL GÖRÜNÜRLÜĞÜ
+# =========================================================
+
+@bot.tree.command(
+    name="kanalgorunurluk",
+    description="Rollerin kanal görünürlüğünü ayarlar."
+)
+@app_commands.describe(
+    rol1="1. Rol",
+    gorunurluk="True: görebilsin / False: gizlensin",
+    rol2="2. Rol",
+    rol3="3. Rol",
+    rol4="4. Rol"
+)
+async def kanalgorunurluk(
+    interaction: discord.Interaction,
+    rol1: discord.Role,
+    gorunurluk: bool,
+    rol2: discord.Role = None,
+    rol3: discord.Role = None,
+    rol4: discord.Role = None
+):
+
+    if not yetki_kontrol(
+        interaction,
+        "manage_channels"
+    ):
+
+        return await hata_mesaji(
+            interaction,
+            "Kanalları yönetme yetkiniz yok."
+        )
+
+    roller = [
+        role
+        for role in [
+            rol1,
+            rol2,
+            rol3,
+            rol4
+        ]
+        if role is not None
+    ]
+
+    try:
+
+        for role in roller:
+
+            await interaction.channel.set_permissions(
+                role,
+                view_channel=gorunurluk
+            )
+
+        names = ", ".join(
+            f"**{role.name}**"
+            for role in roller
+        )
+
+        status = (
+            "görebilecek"
+            if gorunurluk
+            else
+            "göremeyecek"
+        )
+
+        await interaction.response.send_message(
+            f"👁️ {names} rolleri artık kanalı "
+            f"*
