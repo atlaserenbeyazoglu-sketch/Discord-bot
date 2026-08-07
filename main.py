@@ -44,7 +44,7 @@ async def on_ready():
         print(f"❌ Sync hatası: {e}")
     print(f"Bot aktif edildi: {bot.user}")
     print("--------------------------------------------------")
-    print("🌐 GELİŞMİŞ BOT KONTROL PANELİ AKTİF (SÜREKLİ AKTİF FENDER SİSTEMİ)")
+    print("🌐 GELİŞMİŞ BOT KONTROL PANELİ AKTİF (FENDER SİSTEMİ)")
     print("--------------------------------------------------")
 
 @bot.event
@@ -85,7 +85,7 @@ async def komutlar(interaction: discord.Interaction):
         value=(
             "**/komutlar** - Komut listesini gösterir.\n"
             "**/panel** - Web panel linkini ve güncel yönetim detaylarını atar.\n"
-            "**/duyuru** - Şık bir formatta ve afişli duyuru metni yayınlar.\n"
+            "**/sunucu-kur** - Tüm kategorileri ve kanalları tek seferde kurar.\n"
             "**/sil** - Belirtilen miktarda mesajı temizler.\n"
             "**/kanalayazmaerişimi** - Birden fazla rolün kanala yazma iznini tek seferde ayarlar.\n"
             "**/mute** - Kullanıcıya zaman aşımı uygular.\n"
@@ -146,23 +146,39 @@ async def on_member_update(before, after):
         except:
             pass
 
-# --- 3. DUYURU KOMUTU ---
-@bot.tree.command(name="duyuru", description="Şık formatlı ve özel afişli duyuru oluşturur.")
-@app_commands.describe(baslik="Duyurunun başlığı", mesaj="Duyuru metni")
-async def duyuru(interaction: discord.Interaction, baslik: str, mesaj: str):
-    if not yetki_kontrol(interaction, "manage_guild"):
-        return await hata_mesaji(interaction, "Bu komutu kullanmak için 'Sunucuyu Yönet' yetkiniz olmalı.")
+# --- 3. SUNUCU KURULUM KOMUTU ---
+@bot.tree.command(name="sunucu-kur", description="Tüm kategorileri ve kanalları tek seferde kurar.")
+async def sunucu_kur(interaction: discord.Interaction):
+    if not yetki_kontrol(interaction, "manage_channels"):
+        return await hata_mesaji(interaction, "Kanal yönetme yetkiniz yok!")
     
-    embed = discord.Embed(
-        title=f"📢 {baslik}",
-        description=f"{mesaj}\n\n━━━━━━━━━━━━━━━━━━━━━━",
-        color=0xFEE75C,
-        timestamp=datetime.datetime.now()
-    )
-    embed.set_thumbnail(url="https://i.hizliresim.com/bwhk6i1.jpg")
-    embed.set_footer(text=f"Duyuruyu Yapan: {interaction.user.name}", icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None)
+    await interaction.response.defer()
+    guild = interaction.guild
     
-    await interaction.response.send_message("@everyone Duyuru var!", embed=embed)
+    try:
+        # 1. Kategori: Önemli
+        kat1 = await guild.create_category("「📌」Önemli")
+        for isim in ["❓biz-kimiz", "❓görevlerimiz", "⬛kara-liste", "🚪gelen-giden", "👔kılık-kıyafet"]:
+            await guild.create_text_channel(isim, category=kat1)
+        
+        # 2. Kategori: Duyuru
+        kat2 = await guild.create_category("「📢」Duyuru")
+        for isim in ["📢personel-duyuru", "📢aktiflik-duyuru", "📢operasyon-duyuru", "📜kararname", "📋hiyerarşi"]:
+            await guild.create_text_channel(isim, category=kat2)
+
+        # 3. Kategori: Sohbet
+        kat3 = await guild.create_category("「🗨」Sohbet Kanalları")
+        for isim in ["🗨sohbet", "📸galeri-kanalı", "🤖bot-komut", "🤔öneri-istek", "📤i̇stifa-i̇zin", "😴inaktiflik-izin"]:
+            await guild.create_text_channel(isim, category=kat3)
+            
+        # 4. Kategori: Kayıtlar
+        kat4 = await guild.create_category("「🧾」Kayıtlar")
+        for isim in ["🧾alım-logs", "🧾alım-sistemi", "🧾eğitim-logs", "🧾eğitim-sistemi"]:
+            await guild.create_text_channel(isim, category=kat4)
+            
+        await interaction.followup.send("✅ **Sistem başarıyla kuruldu!** Tüm kategoriler ve kanallar eksiksiz oluşturuldu.")
+    except Exception as e:
+        await interaction.followup.send(f"❌ Kurulum sırasında hata oluştu: {e}")
 
 # --- 4. MODERASYON KOMUTLARI ---
 @bot.tree.command(name="sil", description="Belirtilen miktarda mesajı temizler.")
@@ -282,7 +298,7 @@ async def on_member_join(member):
             except:
                 pass
 
-# --- ULTRA TEKNOLOJİK WEB PANELİ & FENDER SÜREKLİ AKTİF SİSTEMİ ---
+# --- ULTRA TEKNOLOJİK WEB PANELİ & SÜREKLİ AKTİF FENDER SİSTEMİ ---
 app = Flask(__name__)
 
 LOGIN_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Güvenli Giriş</title><style>body{background:#1e1f22;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.box{background:#2b2d31;padding:40px;border-radius:12px;width:320px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.5);}input,button{width:100%;padding:12px;margin:12px 0;background:#1e1f22;color:#fff;border:1px solid #444;border-radius:6px;box-sizing:border-box;font-size:16px;}button{background:#5865f2;font-weight:bold;cursor:pointer;transition:background 0.2s;}button:hover{background:#4752c4;}.err{color:#ed4245;font-size:14px;margin-bottom:10px;}</style></head><body><div class="box"><h2>🛡️ Güvenli Panel</h2>{% if error %}<p class="err">{{error}}</p>{% endif %}<form method="POST"><input type="password" name="password" placeholder="Şifrenizi Girin" required><button type="submit">Sisteme Bağlan</button></form></div></body></html>"""
@@ -334,7 +350,7 @@ def server(gid):
         SET[gid]["otorol_id"] = request.form.get("otorol_id", "")
         SET[gid]["hosgeldin_kanal_id"] = request.form.get("hosgeldin_kanal_id", "")
         SET[gid]["log_kanal_id"] = request.form.get("log_kanal_id", "")
-        kaydet() # Ayarların sıfırlanmasını tamamen engelleyen kalıcı kayıt
+        kaydet()
         saved = True
         
     return render_template_string(SERVER_H, g=g, set=SET[gid], saved=saved)
@@ -345,4 +361,4 @@ if __name__ == "__main__":
     
     discord_token = os.environ.get("TOKEN")
     bot.run(discord_token)
-        
+    
