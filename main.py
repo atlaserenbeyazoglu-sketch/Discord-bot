@@ -29,7 +29,13 @@ bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 async def on_ready():
     yukle()
     for g in bot.guilds:
-        SET.setdefault(g.id, {"name": g.name, "otorol_id": "", "hosgeldin_kanal_id": ""})
+        SET.setdefault(g.id, {
+            "name": g.name, 
+            "otorol_id": "", 
+            "hosgeldin_kanal_id": "", 
+            "log_kanal_id": "", 
+            "gelistirici_rol_id": ""
+        })
         SET[g.id]["name"] = g.name
     kaydet()
     try:
@@ -63,7 +69,7 @@ async def hata_mesaji(interaction, metin):
 async def panel(interaction: discord.Interaction):
     embed = discord.Embed(
         title="🌐 Web Kontrol Paneli", 
-        description="Sunucu ayarlarını yönetmek için web panelini kullanabilirsin. (Şifre gereklidir)", 
+        description="Sunucu ayarlarını yönetmek için web panelini kullanabilirsin. (Şifre: 2904)", 
         color=0x5865F2
     )
     await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -87,14 +93,70 @@ async def komutlar(interaction: discord.Interaction):
             "**/unmute** - Kullanıcının susturmasını kaldırır.\n"
             "**/yavaşmod** - Kanalın yavaş mod süresini ayarlar.\n"
             "**/kanalgörünülürlük** - Birden fazla rolün kanalı görüp görmeyeceğini ayarlar.\n"
-            "**/rolver** - Üyeye belirtilen rolü verir (Log tutulur).\n"
-            "**/rolal** - Üyeden belirtilen rolü alır (Log tutulur)."
+            "**/geliştiricikontrol** - Geliştirici rol bağlılık durumunu test eder."
         ),
         inline=False
     )
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-# --- 2. MESAJ TEMİZLEME ---
+# --- 2. OTOMATİK ROL DEĞİŞİM (LOG) DİNLEYİCİSİ ---
+@bot.event
+async def on_member_update(before, after):
+    if before.roles == after.roles:
+        return
+
+    guild = after.guild
+    s = SET.get(guild.id, {})
+    log_kanal_id = s.get("log_kanal_id")
+    if not log_kanal_id:
+        return
+
+    log_kanali = guild.get_channel(int(log_kanal_id))
+    if not log_kanali:
+        return
+
+    # Rol eklendi mi?
+    eklenen_roller = [r for r in after.roles if r not in before.roles]
+    # Rol alındı mı?
+    alinan_roller = [r for r in before.roles if r not in after.roles]
+
+    for rol in eklenen_roller:
+        embed = discord.Embed(title="✅ Üyeye Rol Verildi", color=0x57F287, timestamp=datetime.datetime.now())
+        embed.add_field(name="Hedef Üye", value=after.mention, inline=True)
+        embed.add_field(name="Verilen Rol", value=rol.mention, inline=True)
+        try:
+            await log_kanali.send(embed=embed)
+        except:
+            pass
+
+    for rol in alinan_roller:
+        embed = discord.Embed(title="⚠️ Üyeden Rol Alındı", color=0xED4245, timestamp=datetime.datetime.now())
+        embed.add_field(name="Hedef Üye", value=after.mention, inline=True)
+        embed.add_field(name="Alınan Rol", value=rol.mention, inline=True)
+        try:
+            await log_kanali.send(embed=embed)
+        except:
+            pass
+
+# --- 3. GELİŞTİRİCİ ROL KONTROLÜ ---
+@bot.tree.command(name="geliştiricikontrol", description="Profilindeki bağlı geliştirici rolünü kontrol eder.")
+async def geliştiricikontrol(interaction: discord.Interaction):
+    s = SET.get(interaction.guild.id, {})
+    gelistirici_rol_id = s.get("gelistirici_rol_id")
+    
+    if not gelistirici_rol_id:
+        return await interaction.response.send_message("❌ Bu sunucu için web panelinden henüz bir geliştirici rolü bağlanmamış.", ephemeral=True)
+    
+    rol = interaction.guild.get_role(int(gelistirici_rol_id))
+    if not rol:
+        return await interaction.response.send_message("❌ Tanımlı geliştirici rolü sunucuda bulunamadı veya silinmiş.", ephemeral=True)
+    
+    if rol in interaction.user.roles:
+        await interaction.response.send_message(f"👑 Tebrikler! **{rol.name}** rolüne sahipsin. Bu botun resmi geliştiricisi olarak doğrulandın.", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"🔒 Üzgünüm, profilinde **{rol.name}** rolü bulunmuyor.", ephemeral=True)
+
+# --- 4. DİĞER MODERASYON KOMUTLARI ---
 @bot.tree.command(name="sil", description="Belirtilen miktarda mesajı temizler.")
 @app_commands.describe(limit="Silinecek mesaj sayısı")
 async def sil(interaction: discord.Interaction, limit: int = 5):
@@ -104,49 +166,13 @@ async def sil(interaction: discord.Interaction, limit: int = 5):
     silinenler = await interaction.channel.purge(limit=limit)
     await interaction.followup.send(f"🧹 Başarıyla {len(silinenler)} mesaj silindi.", ephemeral=True)
 
-# --- 3. ROL VERME / ALMA VE LOGLAMA SİSTEMİ ---
-@bot.tree.command(name="rolver", description="Üyeye belirtilen rolü verir ve işlemi kaydeder.")
-@app_commands.describe(üye="Hedef üye", rol="Verilecek rol")
-async def rolver(interaction: discord.Interaction, üye: discord.Member, rol: discord.Role):
-    if not yetki_kontrol(interaction, "manage_roles"):
-        return await hata_mesaji(interaction, "Rolleri yönet yetkiniz bulunmuyor.")
-    await üye.add_roles(rol)
-    
-    # Konsol ve İşlem Logu
-    print(f"🟢 [ROL VERME] Yetkili: {interaction.user} | Üye: {üye} | Rol: {rol.name}")
-    
-    embed = discord.Embed(title="✅ Rol Verildi", color=0x57F287, timestamp=datetime.datetime.now())
-    embed.add_field(name="İşlemi Yapan", value=interaction.user.mention, inline=True)
-    embed.add_field(name="Hedef Üye", value=üye.mention, inline=True)
-    embed.add_field(name="Verilen Rol", value=rol.mention, inline=False)
-    await interaction.response.send_message(embed=embed)
-
-@bot.tree.command(name="rolal", description="Üyeden belirtilen rolü alır ve işlemi kaydeder.")
-@app_commands.describe(üye="Hedef üye", rol="Alınacak rol")
-async def rolal(interaction: discord.Interaction, üye: discord.Member, rol: discord.Role):
-    if not yetki_kontrol(interaction, "manage_roles"):
-        return await hata_mesaji(interaction, "Rolleri yönet yetkiniz bulunmuyor.")
-    await üye.remove_roles(rol)
-    
-    # Konsol ve İşlem Logu
-    print(f"🔴 [ROL ALMA] Yetkili: {interaction.user} | Üye: {üye} | Rol: {rol.name}")
-    
-    embed = discord.Embed(title="⚠️ Rol Alındı", color=0xED4245, timestamp=datetime.datetime.now())
-    embed.add_field(name="İşlemi Yapan", value=interaction.user.mention, inline=True)
-    embed.add_field(name="Hedef Üye", value=üye.mention, inline=True)
-    embed.add_field(name="Alınan Rol", value=rol.mention, inline=False)
-    await interaction.response.send_message(embed=embed)
-
-# --- 4. GELİŞMİŞ LOCK VE UNLOCK ---
 @bot.tree.command(name="lock", description="Kanalı kilitler ve seçilen rolün yazma iznini belirler.")
 @app_commands.describe(rol="İzin verilecek veya kısıtlanacak rol", durum="True (Yazabilsin), False (Yazamasın)")
 async def lock(interaction: discord.Interaction, rol: discord.Role, durum: bool):
     if not yetki_kontrol(interaction, "manage_channels"):
         return await hata_mesaji(interaction, "Kanalları yönet yetkiniz yok.")
-    
     await interaction.channel.set_permissions(interaction.guild.default_role, send_messages=False)
     await interaction.channel.set_permissions(rol, send_messages=durum)
-    
     durum_metni = "açıldı ✍️" if durum else "kapatıldı 🚫"
     await interaction.response.send_message(f"🔒 Kanal başarıyla kilitlendi. **{rol.name}** rolünün bu kanala mesaj yazma izni **{durum_metni}**.")
 
@@ -157,7 +183,6 @@ async def unlock(interaction: discord.Interaction):
     await interaction.channel.set_permissions(interaction.guild.default_role, send_messages=True)
     await interaction.response.send_message("🔓 Kanalın kilidi başarıyla kaldırıldı, herkes mesaj yazabilir.")
 
-# --- 5. MUTE, UNMUTE VE YAVAŞMOD ---
 @bot.tree.command(name="mute", description="Kullanıcıya belirtilen süre kadar zaman aşımı uygular.")
 @app_commands.describe(üye="Susturulacak üye", saat="Süre (saat cinsinden)", sebep="Susturma sebebi")
 async def mute(interaction: discord.Interaction, üye: discord.Member, saat: int = 1, sebep: str = "Belirtilmedi"):
@@ -185,7 +210,6 @@ async def yavaşmod(interaction: discord.Interaction, saniye: int):
     else:
         await interaction.response.send_message(f"⏳ Bu kanal için yavaş mod başarıyla **{saniye} saniye** olarak ayarlandı.")
 
-# --- 6. KANAL GÖRÜNÜRLÜK (ÇOKLU ROL DESTEKLİ) ---
 @bot.tree.command(name="kanalgörünülürlük", description="Seçilen birden fazla rolün kanalı görüp görmeyeceğini ayarlar.")
 @app_commands.describe(
     rol1="1. Rol", rol2="2. Rol (İsteğe bağlı)", 
@@ -202,15 +226,12 @@ async def kanalgörünülürlük(
 ):
     if not yetki_kontrol(interaction, "manage_channels"):
         return await hata_mesaji(interaction, "Kanalları yönet yetkiniz yok.")
-    
     roller = [r for r in [rol1, rol2, rol3, rol4] if r is not None]
     islem_metni = "görebilecek" if görünürlük else "gizlenecek"
     rol_isimleri = []
-
     for r in roller:
         await interaction.channel.set_permissions(r, view_channel=görünürlük)
         rol_isimleri.append(r.name)
-
     liste_str = ", ".join([f"**{name}**" for name in rol_isimleri])
     await interaction.response.send_message(f"👁️ Kanal görünürlük ayarları güncellendi: {liste_str} rolleri için kanal artık {islem_metni}.")
 
@@ -241,7 +262,7 @@ LOGIN_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>G
 
 INDEX_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Panel</title><style>body{background:#2b2d31;color:#fff;font-family:sans-serif;padding:20px;}.box{max-width:500px;margin:auto;background:#313338;padding:20px;border-radius:8px;}.card{background:#111;padding:12px;margin-bottom:10px;border-radius:6px;display:flex;justify-content:space-between;align-items:center;}.btn{background:#5865f2;color:#fff;padding:8px 14px;border-radius:4px;text-decoration:none;font-weight:bold;}.logout{color:#ed4245;text-decoration:none;float:right;font-size:14px;}</style></head><body><div class="box"><a href="/logout" class="logout">Çıkış Yap</a><h2>🤖 Sunucu Seç</h2>{% for g in guilds %}<div class="card"><span>📢 {{g.name}}</span><a href="/server/{{g.id}}" class="btn">Yönet</a></div>{% endfor %}</div></body></html>"""
 
-SERVER_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Ayarlar</title><style>body{background:#2b2d31;color:#fff;font-family:sans-serif;padding:20px;}.box{max-width:500px;margin:auto;background:#313338;padding:20px;border-radius:8px;}select,button{width:100%;padding:10px;margin:10px 0;background:#1e1f22;color:#fff;border:1px solid #444;border-radius:5px;}button{background:#5865f2;font-weight:bold;cursor:pointer;}.back{display:block;margin-bottom:15px;color:#00aff4;text-decoration:none;}</style></head><body><div class="box"><a href="/" class="back">⬅️ Geri</a><h2>⚙️ {{g.name}}</h2><form method="POST"><label>Otorol:</label><select name="otorol_id"><option value="">-- Seçilmedi --</option>{% for r in g.roles %}{% if r.name != "@everyone" %}<option value="{{r.id}}" {% if set.get('otorol_id')|string == r.id|string %}selected{% endif %}>{{r.name}}</option>{% endif %}{% endfor %}</select><label>Hoş Geldin Kanalı:</label><select name="hosgeldin_kanal_id"><option value="">-- Seçilmedi --</option>{% for c in g.text_channels %}<option value="{{c.id}}" {% if set.get('hosgeldin_kanal_id')|string == c.id|string %}selected{% endif %}>#{{c.name}}</option>{% endfor %}</select><button type="submit">Kaydet</button></form></div></body></html>"""
+SERVER_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Ayarlar</title><style>body{background:#2b2d31;color:#fff;font-family:sans-serif;padding:20px;}.box{max-width:500px;margin:auto;background:#313338;padding:20px;border-radius:8px;}select,button{width:100%;padding:10px;margin:10px 0;background:#1e1f22;color:#fff;border:1px solid #444;border-radius:5px;}button{background:#5865f2;font-weight:bold;cursor:pointer;}.back{display:block;margin-bottom:15px;color:#00aff4;text-decoration:none;}</style></head><body><div class="box"><a href="/" class="back">⬅️ Geri</a><h2>⚙️ {{g.name}}</h2><form method="POST"><label>Otorol:</label><select name="otorol_id"><option value="">-- Seçilmedi --</option>{% for r in g.roles %}{% if r.name != "@everyone" %}<option value="{{r.id}}" {% if set.get('otorol_id')|string == r.id|string %}selected{% endif %}>{{r.name}}</option>{% endif %}{% endfor %}</select><label>Hoş Geldin Kanalı:</label><select name="hosgeldin_kanal_id"><option value="">-- Seçilmedi --</option>{% for c in g.text_channels %}<option value="{{c.id}}" {% if set.get('hosgeldin_kanal_id')|string == c.id|string %}selected{% endif %}>#{{c.name}}</option>{% endfor %}</select><label>Rol Log Kanalı:</label><select name="log_kanal_id"><option value="">-- Seçilmedi --</option>{% for c in g.text_channels %}<option value="{{c.id}}" {% if set.get('log_kanal_id')|string == c.id|string %}selected{% endif %}>#{{c.name}}</option>{% endfor %}</select><label>Geliştirici Rolü (Bağlı Rol):</label><select name="gelistirici_rol_id"><option value="">-- Seçilmedi --</option>{% for r in g.roles %}{% if r.name != "@everyone" %}<option value="{{r.id}}" {% if set.get('gelistirici_rol_id')|string == r.id|string %}selected{% endif %}>{{r.name}}</option>{% endif %}{% endfor %}</select><button type="submit">Kaydet</button></form></div></body></html>"""
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -274,10 +295,12 @@ def server(gid):
     g = bot.get_guild(gid)
     if not g:
         return "Bulunamadı", 404
-    SET.setdefault(gid, {"name": g.name, "otorol_id": "", "hosgeldin_kanal_id": ""})
+    SET.setdefault(gid, {"name": g.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": "", "gelistirici_rol_id": ""})
     if request.method == "POST":
         SET[gid]["otorol_id"] = request.form.get("otorol_id")
         SET[gid]["hosgeldin_kanal_id"] = request.form.get("hosgeldin_kanal_id")
+        SET[gid]["log_kanal_id"] = request.form.get("log_kanal_id")
+        SET[gid]["gelistirici_rol_id"] = request.form.get("gelistirici_rol_id")
         kaydet()
     return render_template_string(SERVER_H, g=g, set=SET[gid])
 
@@ -287,3 +310,4 @@ if __name__ == "__main__":
     
     discord_token = os.environ.get("TOKEN")
     bot.run(discord_token)
+    
