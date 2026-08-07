@@ -1,7 +1,7 @@
 import discord, json, os, datetime, threading
 from discord.ext import commands
 from discord import app_commands
-from flask import Flask, render_template_string, request, session, redirect, url_for
+from flask import Flask, render_template_string, request, redirect, url_for
 
 DOSYA = "ayarlar.json"
 SET = {}
@@ -44,7 +44,7 @@ async def on_ready():
         print(f"❌ Sync hatası: {e}")
     print(f"Bot aktif edildi: {bot.user}")
     print("--------------------------------------------------")
-    print("🌐 WEB KONTROL PANELİ AKTİF (Şifreli)")
+    print("🌐 ULTRA TEKNOLOJİK GÜVENLİ WEB PANELİ AKTİF")
     print("--------------------------------------------------")
 
 @bot.event
@@ -67,8 +67,8 @@ async def hata_mesaji(interaction, metin):
 @bot.tree.command(name="panel", description="Web kontrol paneli linkini gönderir.")
 async def panel(interaction: discord.Interaction):
     embed = discord.Embed(
-        title="🌐 Web Kontrol Paneli", 
-        description="Sunucu ayarlarını (Otorol, Hoş Geldin Kanalı ve Rol Log Kanalı) yönetmek için web panelini kullanabilirsin. (Giriş şifresi gereklidir)", 
+        title="🌐 Ultra Teknolojik Web Kontrol Paneli", 
+        description="Sunucu ayarlarını (Otorol, Hoş Geldin Kanalı ve Rol Log Kanalı) yönetmek için web panelini kullanabilirsin. (Kalıcı Oturum Güvenliği Aktif)", 
         color=0x5865F2
     )
     await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -105,6 +105,7 @@ async def on_member_update(before, after):
         return
 
     guild = after.guild
+    yukle() # Verilerin güncel okunması için
     s = SET.get(guild.id, {})
     log_kanal_id = s.get("log_kanal_id")
     if not log_kanal_id:
@@ -118,7 +119,7 @@ async def on_member_update(before, after):
     try:
         async for entry in guild.audit_logs(limit=5, action=discord.AuditLogAction.member_role_update):
             if entry.target.id == after.id:
-                islem_yapan = entry.user.name
+                islem_yapan = entry.user.mention
                 break
     except:
         pass
@@ -128,9 +129,9 @@ async def on_member_update(before, after):
 
     for rol in eklenen_roller:
         embed = discord.Embed(title="✅ Rol Verildi", color=0x57F287, timestamp=datetime.datetime.now())
-        embed.add_field(name="Rol Verilen Kullanıcı İsmi", value=after.name, inline=False)
-        embed.add_field(name="Verilen Rol", value=rol.name, inline=False)
-        embed.add_field(name="Rolü Veren Kullanıcı İsmi", value=islem_yapan, inline=False)
+        embed.add_field(name="Rol Verilen Kullanıcı", value=after.mention, inline=False)
+        embed.add_field(name="Verilen Rol", value=rol.mention, inline=False)
+        embed.add_field(name="Rolü Veren", value=islem_yapan, inline=False)
         try:
             await log_kanali.send(embed=embed)
         except:
@@ -138,9 +139,9 @@ async def on_member_update(before, after):
 
     for rol in alinan_roller:
         embed = discord.Embed(title="⚠️ Rol Alındı", color=0xED4245, timestamp=datetime.datetime.now())
-        embed.add_field(name="Rolü Alınan Kullanıcı İsmi", value=after.name, inline=False)
-        embed.add_field(name="Alınan Rol", value=rol.name, inline=False)
-        embed.add_field(name="Rolü Alan Kullanıcı İsmi", value=islem_yapan, inline=False)
+        embed.add_field(name="Rolü Alınan Kullanıcı", value=after.mention, inline=False)
+        embed.add_field(name="Alınan Rol", value=rol.mention, inline=False)
+        embed.add_field(name="Rolü Silen", value=islem_yapan, inline=False)
         try:
             await log_kanali.send(embed=embed)
         except:
@@ -159,7 +160,7 @@ async def duyuru(interaction: discord.Interaction, baslik: str, mesaj: str):
         color=0xFEE75C,
         timestamp=datetime.datetime.now()
     )
-    embed.set_thumbnail(url="https://i.hizliresim.com/bwhk6i1.jpg") # İstediğin afiş/görsel bağlantısı
+    embed.set_thumbnail(url="https://i.hizliresim.com/bwhk6i1.jpg")
     embed.set_footer(text=f"Duyuruyu Yapan: {interaction.user.name}", icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None)
     
     await interaction.response.send_message("@everyone Duyuru var!", embed=embed)
@@ -264,6 +265,7 @@ async def kanalgörünülürlük(
 # --- ÜYE ETKİNLİKLERİ ---
 @bot.event
 async def on_member_join(member):
+    yukle()
     s = SET.get(member.guild.id, {})
     if s.get("otorol_id"):
         rol = member.guild.get_role(int(s["otorol_id"]))
@@ -280,14 +282,14 @@ async def on_member_join(member):
             except:
                 pass
 
-# --- WEB PANELİ (FLASK - HER SAYFADA ŞİFRE KONTROLÜ) ---
+# --- ULTRA TEKNOLOJİK WEB PANELİ (KALICI GÜVENLİ OTURUM) ---
 app = Flask(__name__)
 
-LOGIN_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Giriş</title><style>body{background:#2b2d31;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.box{background:#313338;padding:30px;border-radius:10px;width:300px;text-align:center;}input,button{width:100%;padding:10px;margin:10px 0;background:#1e1f22;color:#fff;border:1px solid #444;border-radius:5px;box-sizing:border-box;}button{background:#5865f2;font-weight:bold;cursor:pointer;}.err{color:#ed4245;font-size:14px;}</style></head><body><div class="box"><h2>🔐 Panel Girişi</h2>{% if error %}<p class="err">{{error}}</p>{% endif %}<form method="POST"><input type="password" name="password" placeholder="Şifre" required><button type="submit">Giriş Yap</button></form></div></body></html>"""
+LOGIN_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Güvenli Giriş</title><style>body{background:#1e1f22;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.box{background:#2b2d31;padding:40px;border-radius:12px;width:320px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.5);}input,button{width:100%;padding:12px;margin:12px 0;background:#1e1f22;color:#fff;border:1px solid #444;border-radius:6px;box-sizing:border-box;font-size:16px;}button{background:#5865f2;font-weight:bold;cursor:pointer;transition:background 0.2s;}button:hover{background:#4752c4;}.err{color:#ed4245;font-size:14px;margin-bottom:10px;}</style></head><body><div class="box"><h2>🛡️ Güvenli Panel</h2>{% if error %}<p class="err">{{error}}</p>{% endif %}<form method="POST"><input type="password" name="password" placeholder="Şifre (2904)" required><button type="submit">Sisteme Bağlan</button></form></div></body></html>"""
 
-INDEX_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Panel</title><style>body{background:#2b2d31;color:#fff;font-family:sans-serif;padding:20px;}.box{max-width:500px;margin:auto;background:#313338;padding:20px;border-radius:8px;}.card{background:#111;padding:12px;margin-bottom:10px;border-radius:6px;display:flex;justify-content:space-between;align-items:center;}.btn{background:#5865f2;color:#fff;padding:8px 14px;border-radius:4px;text-decoration:none;font-weight:bold;}.logout{color:#ed4245;text-decoration:none;float:right;font-size:14px;}</style></head><body><div class="box"><a href="/logout" class="logout">Çıkış Yap</a><h2>🤖 Sunucu Seç</h2>{% for g in guilds %}<div class="card"><span>📢 {{g.name}}</span><a href="/server/{{g.id}}" class="btn">Yönet</a></div>{% endfor %}</div></body></html>"""
+INDEX_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Ultra Panel</title><style>body{background:#1e1f22;color:#fff;font-family:sans-serif;padding:30px;}.box{max-width:600px;margin:auto;background:#2b2d31;padding:30px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.5);}.card{background:#111;padding:15px;margin-bottom:12px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;}.btn{background:#5865f2;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold;}.logout{color:#ed4245;text-decoration:none;float:right;font-size:14px;font-weight:bold;}</style></head><body><div class="box"><a href="/logout" class="logout">Oturumu Kapat</a><h2>🤖 Sunucu Seçimi</h2><hr style="border:0;border-top:1px solid #444;margin:15px 0;">{% for g in guilds %}<div class="card"><span>📢 {{g.name}}</span><a href="/server/{{g.id}}" class="btn">Yönet</a></div>{% endfor %}</div></body></html>"""
 
-SERVER_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Ayarlar</title><style>body{background:#2b2d31;color:#fff;font-family:sans-serif;padding:20px;}.box{max-width:500px;margin:auto;background:#313338;padding:20px;border-radius:8px;}select,button{width:100%;padding:10px;margin:10px 0;background:#1e1f22;color:#fff;border:1px solid #444;border-radius:5px;}button{background:#5865f2;font-weight:bold;cursor:pointer;}.back{display:block;margin-bottom:15px;color:#00aff4;text-decoration:none;}.logout{color:#ed4245;text-decoration:none;float:right;font-size:14px;}</style></head><body><div class="box"><a href="/logout" class="logout">Çıkış Yap</a><a href="/" class="back">⬅️ Geri</a><h2>⚙️ {{g.name}}</h2><form method="POST"><label>Otorol:</label><select name="otorol_id"><option value="">-- Seçilmedi --</option>{% for r in g.roles %}{% if r.name != "@everyone" %}<option value="{{r.id}}" {% if set.get('otorol_id')|string == r.id|string %}selected{% endif %}>{{r.name}}</option>{% endif %}{% endfor %}</select><label>Hoş Geldin Kanalı:</label><select name="hosgeldin_kanal_id"><option value="">-- Seçilmedi --</option>{% for c in g.text_channels %}<option value="{{c.id}}" {% if set.get('hosgeldin_kanal_id')|string == c.id|string %}selected{% endif %}>#{{c.name}}</option>{% endfor %}</select><label>Rol Log Kanalı:</label><select name="log_kanal_id"><option value="">-- Seçilmedi --</option>{% for c in g.text_channels %}<option value="{{c.id}}" {% if set.get('log_kanal_id')|string == c.id|string %}selected{% endif %}>#{{c.name}}</option>{% endfor %}</select><button type="submit">Kaydet</button></form></div></body></html>"""
+SERVER_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Sunucu Ayarları</title><style>body{background:#1e1f22;color:#fff;font-family:sans-serif;padding:30px;}.box{max-width:600px;margin:auto;background:#2b2d31;padding:30px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.5);}select,button{width:100%;padding:12px;margin:12px 0;background:#1e1f22;color:#fff;border:1px solid #444;border-radius:6px;font-size:16px;}button{background:#57F287;color:#111;font-weight:bold;cursor:pointer;transition:background 0.2s;}button:hover{background:#45b66c;}.back{display:inline-block;margin-bottom:15px;color:#00aff4;text-decoration:none;font-weight:bold;}.logout{color:#ed4245;text-decoration:none;float:right;font-size:14px;font-weight:bold;}.alert{background:#57F287;color:#111;padding:10px;border-radius:6px;text-align:center;font-weight:bold;margin-bottom:15px;}</style></head><body><div class="box"><a href="/logout" class="logout">Oturumu Kapat</a><a href="/" class="back">⬅️ Geri Dön</a><h2>⚙️ {{g.name}} Yönetim</h2><hr style="border:0;border-top:1px solid #444;margin:15px 0;">{% if saved %}<div class="alert">✅ Ayarlar başarıyla kaydedildi!</div>{% endif %}<form method="POST"><label>Otorol:</label><select name="otorol_id"><option value="">-- Seçilmedi --</option>{% for r in g.roles %}{% if r.name != "@everyone" %}<option value="{{r.id}}" {% if set.get('otorol_id')|string == r.id|string %}selected{% endif %}>{{r.name}}</option>{% endif %}{% endfor %}</select><label>Hoş Geldin Kanalı:</label><select name="hosgeldin_kanal_id"><option value="">-- Seçilmedi --</option>{% for c in g.text_channels %}<option value="{{c.id}}" {% if set.get('hosgeldin_kanal_id')|string == c.id|string %}selected{% endif %}>#{{c.name}}</option>{% endfor %}</select><label>Rol Log Kanalı:</label><select name="log_kanal_id"><option value="">-- Seçilmedi --</option>{% for c in g.text_channels %}<option value="{{c.id}}" {% if set.get('log_kanal_id')|string == c.id|string %}selected{% endif %}>#{{c.name}}</option>{% endfor %}</select><button type="submit">Değişiklikleri Kaydet</button></form></div></body></html>"""
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -295,40 +297,47 @@ def login():
     if request.method == "POST":
         if request.form.get("password") == "2904":
             response = redirect(url_for("index"))
-            response.set_cookie("auth", "2904")
+            response.set_cookie("secure_auth", "ultra_secure_token_2904_active", max_age=60*60*24*365) # 1 yıl kalıcı güvenli çerez
             return response
         else:
-            error = "Hatalı Şifre!"
+            error = "Hatalı Güvenlik Şifresi!"
     return render_template_string(LOGIN_H, error=error)
 
 @app.route("/logout")
 def logout():
     response = redirect(url_for("login"))
-    response.set_cookie("auth", "", expires=0)
+    response.set_cookie("secure_auth", "", expires=0)
     return response
 
 @app.route("/")
 def index():
-    if request.cookies.get("auth") != "2904":
+    if request.cookies.get("secure_auth") != "ultra_secure_token_2904_active":
         return redirect(url_for("login"))
     yukle()
     return render_template_string(INDEX_H, guilds=bot.guilds)
 
 @app.route("/server/<int:gid>", methods=["GET", "POST"])
 def server(gid):
-    if request.cookies.get("auth") != "2904":
+    if request.cookies.get("secure_auth") != "ultra_secure_token_2904_active":
         return redirect(url_for("login"))
+    
     yukle()
     g = bot.get_guild(gid)
     if not g:
         return "Bulunamadı", 404
+        
     SET.setdefault(gid, {"name": g.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": ""})
+    saved = False
+    
     if request.method == "POST":
-        SET[gid]["otorol_id"] = request.form.get("otorol_id")
-        SET[gid]["hosgeldin_kanal_id"] = request.form.get("hosgeldin_kanal_id")
-        SET[gid]["log_kanal_id"] = request.form.get("log_kanal_id")
+        SET[gid]["name"] = g.name
+        SET[gid]["otorol_id"] = request.form.get("otorol_id", "")
+        SET[gid]["hosgeldin_kanal_id"] = request.form.get("hosgeldin_kanal_id", "")
+        SET[gid]["log_kanal_id"] = request.form.get("log_kanal_id", "")
         kaydet()
-    return render_template_string(SERVER_H, g=g, set=SET[gid])
+        saved = True
+        
+    return render_template_string(SERVER_H, g=g, set=SET[gid], saved=saved)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
