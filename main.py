@@ -68,7 +68,7 @@ async def hata_mesaji(interaction, metin):
 async def panel(interaction: discord.Interaction):
     embed = discord.Embed(
         title="🌐 Ultra Teknolojik Web Kontrol Paneli", 
-        description="Sunucu ayarlarını (Otorol, Hoş Geldin Kanalı ve Rol Log Kanalı) yönetmek için web panelini kullanabilirsin. (Kalıcı Oturum Güvenliği Aktif)", 
+        description="Sunucu ayarlarını yönetmek için panel: https://discord-bot-fa6e.onrender.com/", 
         color=0x5865F2
     )
     await interaction.response.send_message(embed=embed, ephemeral=True)
