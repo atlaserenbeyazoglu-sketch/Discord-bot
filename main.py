@@ -85,7 +85,7 @@ async def komutlar(interaction: discord.Interaction):
         value=(
             "**/komutlar** - Komut listesini gösterir.\n"
             "**/panel** - Web panel linkini ve güncel yönetim detaylarını atar.\n"
-            "**/sunucu-kur** - Tüm kategorileri ve kanalları tek seferde kurar.\n"
+            "**/sunucu-kur** - Tüm kategorileri ve kanalları tek seferde kurar (Şifre ister).\n"
             "**/sil** - Belirtilen miktarda mesajı temizler.\n"
             "**/kanalayazmaerişimi** - Birden fazla rolün kanala yazma iznini tek seferde ayarlar.\n"
             "**/mute** - Kullanıcıya zaman aşımı uygular.\n"
@@ -148,7 +148,11 @@ async def on_member_update(before, after):
 
 # --- 3. SUNUCU KURULUM KOMUTU ---
 @bot.tree.command(name="sunucu-kur", description="Tüm kategorileri ve kanalları tek seferde kurar.")
-async def sunucu_kur(interaction: discord.Interaction):
+@app_commands.describe(sifre="Kurulum için gereken güvenlik şifresi")
+async def sunucu_kur(interaction: discord.Interaction, sifre: str):
+    if sifre != "2904":
+        return await hata_mesaji(interaction, "Hatalı şifre! Sunucu kurulumu gerçekleştirilemedi.")
+        
     if not yetki_kontrol(interaction, "manage_channels"):
         return await hata_mesaji(interaction, "Kanal yönetme yetkiniz yok!")
     
@@ -361,4 +365,4 @@ if __name__ == "__main__":
     
     discord_token = os.environ.get("TOKEN")
     bot.run(discord_token)
-    
+        
