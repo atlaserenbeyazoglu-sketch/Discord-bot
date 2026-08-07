@@ -105,7 +105,7 @@ async def on_member_update(before, after):
         return
 
     guild = after.guild
-    yukle() # Verilerin güncel okunması için
+    yukle()
     s = SET.get(guild.id, {})
     log_kanal_id = s.get("log_kanal_id")
     if not log_kanal_id:
@@ -140,8 +140,8 @@ async def on_member_update(before, after):
     for rol in alinan_roller:
         embed = discord.Embed(title="⚠️ Rol Alındı", color=0xED4245, timestamp=datetime.datetime.now())
         embed.add_field(name="Rolü Alınan Kullanıcı", value=after.mention, inline=False)
-        embed.add_field(name="Alınan Rol", value=rol.mention, inline=False)
-        embed.add_field(name="Rolü Silen", value=islem_yapan, inline=False)
+        embed.add_field(name="Alınan Rol", value=rol.name, inline=False)
+        embed.add_field(name="Rolü Alan", value=islem_yapan, inline=False)
         try:
             await log_kanali.send(embed=embed)
         except:
@@ -177,13 +177,14 @@ async def sil(interaction: discord.Interaction, limit: int = 5):
 
 @bot.tree.command(name="lock", description="Kanalı kilitler ve seçilen birden fazla rolün yazma iznini belirler.")
 @app_commands.describe(
-    rol1="1. Rol", durum="True (Yazabilsin), False (Yazamasın)",
-    rol2="2. Rol (İsteğe bağlı)", rol3="3. Rol (İsteğe bağlı)", rol4="4. Rol (İsteğe bağlı)"
+    durum="True (Yazabilsin), False (Yazamasın)",
+    rol1="1. Rol", rol2="2. Rol (İsteğe bağlı)", 
+    rol3="3. Rol (İsteğe bağlı)", rol4="4. Rol (İsteğe bağlı)"
 )
 async def lock(
     interaction: discord.Interaction, 
-    rol1: discord.Role, 
     durum: bool,
+    rol1: discord.Role, 
     rol2: discord.Role = None, 
     rol3: discord.Role = None, 
     rol4: discord.Role = None
@@ -285,7 +286,7 @@ async def on_member_join(member):
 # --- ULTRA TEKNOLOJİK WEB PANELİ (KALICI GÜVENLİ OTURUM) ---
 app = Flask(__name__)
 
-LOGIN_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Güvenli Giriş</title><style>body{background:#1e1f22;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.box{background:#2b2d31;padding:40px;border-radius:12px;width:320px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.5);}input,button{width:100%;padding:12px;margin:12px 0;background:#1e1f22;color:#fff;border:1px solid #444;border-radius:6px;box-sizing:border-box;font-size:16px;}button{background:#5865f2;font-weight:bold;cursor:pointer;transition:background 0.2s;}button:hover{background:#4752c4;}.err{color:#ed4245;font-size:14px;margin-bottom:10px;}</style></head><body><div class="box"><h2>🛡️ Güvenli Panel</h2>{% if error %}<p class="err">{{error}}</p>{% endif %}<form method="POST"><input type="password" name="password" placeholder="Şifre (2904)" required><button type="submit">Sisteme Bağlan</button></form></div></body></html>"""
+LOGIN_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Güvenli Giriş</title><style>body{background:#1e1f22;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.box{background:#2b2d31;padding:40px;border-radius:12px;width:320px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.5);}input,button{width:100%;padding:12px;margin:12px 0;background:#1e1f22;color:#fff;border:1px solid #444;border-radius:6px;box-sizing:border-box;font-size:16px;}button{background:#5865f2;font-weight:bold;cursor:pointer;transition:background 0.2s;}button:hover{background:#4752c4;}.err{color:#ed4245;font-size:14px;margin-bottom:10px;}</style></head><body><div class="box"><h2>🛡️ Güvenli Panel</h2>{% if error %}<p class="err">{{error}}</p>{% endif %}<form method="POST"><input type="password" name="password" placeholder="Şifrenizi Girin" required><button type="submit">Sisteme Bağlan</button></form></div></body></html>"""
 
 INDEX_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Ultra Panel</title><style>body{background:#1e1f22;color:#fff;font-family:sans-serif;padding:30px;}.box{max-width:600px;margin:auto;background:#2b2d31;padding:30px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.5);}.card{background:#111;padding:15px;margin-bottom:12px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;}.btn{background:#5865f2;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold;}.logout{color:#ed4245;text-decoration:none;float:right;font-size:14px;font-weight:bold;}</style></head><body><div class="box"><a href="/logout" class="logout">Oturumu Kapat</a><h2>🤖 Sunucu Seçimi</h2><hr style="border:0;border-top:1px solid #444;margin:15px 0;">{% for g in guilds %}<div class="card"><span>📢 {{g.name}}</span><a href="/server/{{g.id}}" class="btn">Yönet</a></div>{% endfor %}</div></body></html>"""
 
@@ -297,7 +298,7 @@ def login():
     if request.method == "POST":
         if request.form.get("password") == "2904":
             response = redirect(url_for("index"))
-            response.set_cookie("secure_auth", "ultra_secure_token_2904_active", max_age=60*60*24*365) # 1 yıl kalıcı güvenli çerez
+            response.set_cookie("secure_auth", "ultra_secure_token_2904_active", max_age=60*60*24*365)
             return response
         else:
             error = "Hatalı Güvenlik Şifresi!"
