@@ -44,7 +44,7 @@ async def on_ready():
         print(f"❌ Sync hatası: {e}")
     print(f"Bot aktif edildi: {bot.user}")
     print("--------------------------------------------------")
-    print("🌐 ULTRA TEKNOLOJİK GÜVENLİ WEB PANELİ AKTİF")
+    print("🌐 GELİŞMİŞ BOT KONTROL PANELİ AKTİF")
     print("--------------------------------------------------")
 
 @bot.event
@@ -67,7 +67,7 @@ async def hata_mesaji(interaction, metin):
 @bot.tree.command(name="panel", description="Web kontrol paneli linkini gönderir.")
 async def panel(interaction: discord.Interaction):
     embed = discord.Embed(
-        title="🌐 Ultra Teknolojik Web Kontrol Paneli", 
+        title="🌐 Gelişmiş Bot Kontrol Paneli", 
         description="Sunucu ayarlarını yönetmek için panel: https://discord-bot-fa6e.onrender.com/", 
         color=0x5865F2
     )
@@ -178,23 +178,32 @@ async def sil(interaction: discord.Interaction, limit: int = 5):
 @bot.tree.command(name="lock", description="Kanalı kilitler ve seçilen birden fazla rolün yazma iznini belirler.")
 @app_commands.describe(
     durum="True (Yazabilsin), False (Yazamasın)",
-    rol1="1. Rol", rol2="2. Rol (İsteğe bağlı)", 
-    rol3="3. Rol (İsteğe bağlı)", rol4="4. Rol (İsteğe bağlı)"
+    rol1="1. Rol", rol2="2. Rol", rol3="3. Rol", rol4="4. Rol", rol5="5. Rol",
+    rol6="6. Rol", rol7="7. Rol", rol8="8. Rol", rol9="9. Rol", rol10="10. Rol"
 )
 async def lock(
     interaction: discord.Interaction, 
     durum: bool,
-    rol1: discord.Role, 
+    rol1: discord.Role = None, 
     rol2: discord.Role = None, 
     rol3: discord.Role = None, 
-    rol4: discord.Role = None
+    rol4: discord.Role = None,
+    rol5: discord.Role = None,
+    rol6: discord.Role = None,
+    rol7: discord.Role = None,
+    rol8: discord.Role = None,
+    rol9: discord.Role = None,
+    rol10: discord.Role = None
 ):
     if not yetki_kontrol(interaction, "manage_channels"):
         return await hata_mesaji(interaction, "Kanalları yönet yetkiniz yok.")
     
     await interaction.channel.set_permissions(interaction.guild.default_role, send_messages=False)
     
-    roller = [r for r in [rol1, rol2, rol3, rol4] if r is not None]
+    roller = [r for r in [rol1, rol2, rol3, rol4, rol5, rol6, rol7, rol8, rol9, rol10] if r is not None]
+    if not roller:
+        return await hata_mesaji(interaction, "En az bir rol seçmelisiniz.")
+
     rol_isimleri = []
     for r in roller:
         await interaction.channel.set_permissions(r, send_messages=durum)
@@ -346,4 +355,4 @@ if __name__ == "__main__":
     
     discord_token = os.environ.get("TOKEN")
     bot.run(discord_token)
-    
+        
