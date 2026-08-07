@@ -45,7 +45,7 @@ async def on_ready():
         print(f"❌ Sync hatası: {e}")
     print(f"Bot aktif edildi: {bot.user}")
     print("--------------------------------------------------")
-    print("🌐 WEB KONTROL PANELİ AKTİF (Şifreli: 2904)")
+    print("🌐 WEB KONTROL PANELİ AKTİF (Şifreli)")
     print("--------------------------------------------------")
 
 @bot.event
@@ -69,7 +69,7 @@ async def hata_mesaji(interaction, metin):
 async def panel(interaction: discord.Interaction):
     embed = discord.Embed(
         title="🌐 Web Kontrol Paneli", 
-        description="Sunucu ayarlarını yönetmek için web panelini kullanabilirsin. (Şifre: 2904)", 
+        description="Sunucu ayarlarını (Otorol, Hoş Geldin Kanalı, Rol Log Kanalı ve Geliştirici Rolü) yönetmek için web panelini kullanabilirsin. (Giriş şifresi gereklidir)", 
         color=0x5865F2
     )
     await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -85,7 +85,7 @@ async def komutlar(interaction: discord.Interaction):
         name="🛠️ Yönetim ve Moderasyon",
         value=(
             "**/komutlar** - Komut listesini gösterir.\n"
-            "**/panel** - Web panel linkini atar.\n"
+            "**/panel** - Web panel linkini ve güncel yönetim detaylarını atar.\n"
             "**/sil** - Belirtilen miktarda mesajı temizler.\n"
             "**/lock** - Kanalı kilitler ve seçilen rolün yazma iznini ayarlar.\n"
             "**/unlock** - Kanalın kilidini açar.\n"
@@ -115,24 +115,34 @@ async def on_member_update(before, after):
     if not log_kanali:
         return
 
-    # Rol eklendi mi?
+    # İşlemi yapan yetkiliyi bulmak için audit log taraması
+    islem_yapan = "Bilinmiyor / Otomatik"
+    try:
+        async for entry in guild.audit_logs(limit=5, action=discord.AuditLogAction.member_role_update):
+            if entry.target.id == after.id:
+                islem_yapan = entry.user.mention
+                break
+    except:
+        pass
+
     eklenen_roller = [r for r in after.roles if r not in before.roles]
-    # Rol alındı mı?
     alinan_roller = [r for r in before.roles if r not in after.roles]
 
     for rol in eklenen_roller:
-        embed = discord.Embed(title="✅ Üyeye Rol Verildi", color=0x57F287, timestamp=datetime.datetime.now())
-        embed.add_field(name="Hedef Üye", value=after.mention, inline=True)
-        embed.add_field(name="Verilen Rol", value=rol.mention, inline=True)
+        embed = discord.Embed(title="✅ Rol Verildi", color=0x57F287, timestamp=datetime.datetime.now())
+        embed.add_field(name="Rol Verilen Kullanıcı", value=after.mention, inline=False)
+        embed.add_field(name="Verilen Rol", value=rol.mention, inline=False)
+        embed.add_field(name="Rolü Veren Yetkili", value=islem_yapan, inline=False)
         try:
             await log_kanali.send(embed=embed)
         except:
             pass
 
     for rol in alinan_roller:
-        embed = discord.Embed(title="⚠️ Üyeden Rol Alındı", color=0xED4245, timestamp=datetime.datetime.now())
-        embed.add_field(name="Hedef Üye", value=after.mention, inline=True)
-        embed.add_field(name="Alınan Rol", value=rol.mention, inline=True)
+        embed = discord.Embed(title="⚠️ Rol Alındı", color=0xED4245, timestamp=datetime.datetime.now())
+        embed.add_field(name="Rolü Alınan Kullanıcı", value=after.mention, inline=False)
+        embed.add_field(name="Alınan Rol", value=rol.mention, inline=False)
+        embed.add_field(name="Rolü Alan Yetkili", value=islem_yapan, inline=False)
         try:
             await log_kanali.send(embed=embed)
         except:
@@ -254,42 +264,43 @@ async def on_member_join(member):
             except:
                 pass
 
-# --- WEB PANELİ (FLASK - ŞİFRELİ 2904) ---
+# --- WEB PANELİ (FLASK - HER SAYFADA ŞİFRE KONTROLÜ) ---
 app = Flask(__name__)
-app.secret_key = "gizli_anahtar_2904"
 
-LOGIN_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Giriş</title><style>body{background:#2b2d31;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.box{background:#313338;padding:30px;border-radius:10px;width:300px;text-align:center;}input,button{width:100%;padding:10px;margin:10px 0;background:#1e1f22;color:#fff;border:1px solid #444;border-radius:5px;box-sizing:border-box;}button{background:#5865f2;font-weight:bold;cursor:pointer;}.err{color:#ed4245;font-size:14px;}</style></head><body><div class="box"><h2>🔐 Panel Girişi</h2>{% if error %}<p class="err">{{error}}</p>{% endif %}<form method="POST"><input type="password" name="password" placeholder="Şifre (2904)" required><button type="submit">Giriş Yap</button></form></div></body></html>"""
+LOGIN_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Giriş</title><style>body{background:#2b2d31;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.box{background:#313338;padding:30px;border-radius:10px;width:300px;text-align:center;}input,button{width:100%;padding:10px;margin:10px 0;background:#1e1f22;color:#fff;border:1px solid #444;border-radius:5px;box-sizing:border-box;}button{background:#5865f2;font-weight:bold;cursor:pointer;}.err{color:#ed4245;font-size:14px;}</style></head><body><div class="box"><h2>🔐 Panel Girişi</h2>{% if error %}<p class="err">{{error}}</p>{% endif %}<form method="POST"><input type="password" name="password" placeholder="Şifre" required><button type="submit">Giriş Yap</button></form></div></body></html>"""
 
 INDEX_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Panel</title><style>body{background:#2b2d31;color:#fff;font-family:sans-serif;padding:20px;}.box{max-width:500px;margin:auto;background:#313338;padding:20px;border-radius:8px;}.card{background:#111;padding:12px;margin-bottom:10px;border-radius:6px;display:flex;justify-content:space-between;align-items:center;}.btn{background:#5865f2;color:#fff;padding:8px 14px;border-radius:4px;text-decoration:none;font-weight:bold;}.logout{color:#ed4245;text-decoration:none;float:right;font-size:14px;}</style></head><body><div class="box"><a href="/logout" class="logout">Çıkış Yap</a><h2>🤖 Sunucu Seç</h2>{% for g in guilds %}<div class="card"><span>📢 {{g.name}}</span><a href="/server/{{g.id}}" class="btn">Yönet</a></div>{% endfor %}</div></body></html>"""
 
-SERVER_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Ayarlar</title><style>body{background:#2b2d31;color:#fff;font-family:sans-serif;padding:20px;}.box{max-width:500px;margin:auto;background:#313338;padding:20px;border-radius:8px;}select,button{width:100%;padding:10px;margin:10px 0;background:#1e1f22;color:#fff;border:1px solid #444;border-radius:5px;}button{background:#5865f2;font-weight:bold;cursor:pointer;}.back{display:block;margin-bottom:15px;color:#00aff4;text-decoration:none;}</style></head><body><div class="box"><a href="/" class="back">⬅️ Geri</a><h2>⚙️ {{g.name}}</h2><form method="POST"><label>Otorol:</label><select name="otorol_id"><option value="">-- Seçilmedi --</option>{% for r in g.roles %}{% if r.name != "@everyone" %}<option value="{{r.id}}" {% if set.get('otorol_id')|string == r.id|string %}selected{% endif %}>{{r.name}}</option>{% endif %}{% endfor %}</select><label>Hoş Geldin Kanalı:</label><select name="hosgeldin_kanal_id"><option value="">-- Seçilmedi --</option>{% for c in g.text_channels %}<option value="{{c.id}}" {% if set.get('hosgeldin_kanal_id')|string == c.id|string %}selected{% endif %}>#{{c.name}}</option>{% endfor %}</select><label>Rol Log Kanalı:</label><select name="log_kanal_id"><option value="">-- Seçilmedi --</option>{% for c in g.text_channels %}<option value="{{c.id}}" {% if set.get('log_kanal_id')|string == c.id|string %}selected{% endif %}>#{{c.name}}</option>{% endfor %}</select><label>Geliştirici Rolü (Bağlı Rol):</label><select name="gelistirici_rol_id"><option value="">-- Seçilmedi --</option>{% for r in g.roles %}{% if r.name != "@everyone" %}<option value="{{r.id}}" {% if set.get('gelistirici_rol_id')|string == r.id|string %}selected{% endif %}>{{r.name}}</option>{% endif %}{% endfor %}</select><button type="submit">Kaydet</button></form></div></body></html>"""
+SERVER_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Ayarlar</title><style>body{background:#2b2d31;color:#fff;font-family:sans-serif;padding:20px;}.box{max-width:500px;margin:auto;background:#313338;padding:20px;border-radius:8px;}select,button{width:100%;padding:10px;margin:10px 0;background:#1e1f22;color:#fff;border:1px solid #444;border-radius:5px;}button{background:#5865f2;font-weight:bold;cursor:pointer;}.back{display:block;margin-bottom:15px;color:#00aff4;text-decoration:none;}.logout{color:#ed4245;text-decoration:none;float:right;font-size:14px;}</style></head><body><div class="box"><a href="/logout" class="logout">Çıkış Yap</a><a href="/" class="back">⬅️ Geri</a><h2>⚙️ {{g.name}}</h2><form method="POST"><label>Otorol:</label><select name="otorol_id"><option value="">-- Seçilmedi --</option>{% for r in g.roles %}{% if r.name != "@everyone" %}<option value="{{r.id}}" {% if set.get('otorol_id')|string == r.id|string %}selected{% endif %}>{{r.name}}</option>{% endif %}{% endfor %}</select><label>Hoş Geldin Kanalı:</label><select name="hosgeldin_kanal_id"><option value="">-- Seçilmedi --</option>{% for c in g.text_channels %}<option value="{{c.id}}" {% if set.get('hosgeldin_kanal_id')|string == c.id|string %}selected{% endif %}>#{{c.name}}</option>{% endfor %}</select><label>Rol Log Kanalı:</label><select name="log_kanal_id"><option value="">-- Seçilmedi --</option>{% for c in g.text_channels %}<option value="{{c.id}}" {% if set.get('log_kanal_id')|string == c.id|string %}selected{% endif %}>#{{c.name}}</option>{% endfor %}</select><label>Geliştirici Rolü (Bağlı Rol):</label><select name="gelistirici_rol_id"><option value="">-- Seçilmedi --</option>{% for r in g.roles %}{% if r.name != "@everyone" %}<option value="{{r.id}}" {% if set.get('gelistirici_rol_id')|string == r.id|string %}selected{% endif %}>{{r.name}}</option>{% endif %}{% endfor %}</select><button type="submit">Kaydet</button></form></div></body></html>"""
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
     error = None
     if request.method == "POST":
         if request.form.get("password") == "2904":
-            session["logged_in"] = True
-            return redirect(url_for("index"))
+            response = redirect(url_for("index"))
+            response.set_cookie("auth", "2904")
+            return response
         else:
-            error = "Hatalı Şifre! (Şifre: 2904)"
+            error = "Hatalı Şifre!"
     return render_template_string(LOGIN_H, error=error)
 
 @app.route("/logout")
 def logout():
-    session.pop("logged_in", None)
-    return redirect(url_for("login"))
+    response = redirect(url_for("login"))
+    response.set_cookie("auth", "", expires=0)
+    return response
 
 @app.route("/")
 def index():
-    if not session.get("logged_in"):
+    if request.cookies.get("auth") != "2904":
         return redirect(url_for("login"))
     yukle()
     return render_template_string(INDEX_H, guilds=bot.guilds)
 
 @app.route("/server/<int:gid>", methods=["GET", "POST"])
 def server(gid):
-    if not session.get("logged_in"):
+    if request.cookies.get("auth") != "2904":
         return redirect(url_for("login"))
     yukle()
     g = bot.get_guild(gid)
