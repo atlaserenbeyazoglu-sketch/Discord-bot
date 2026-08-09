@@ -38,8 +38,9 @@ async def on_ready():
         SET[g.id]["name"] = g.name
     kaydet()
     try:
-        await bot.tree.sync()
-        print("✅ Tüm komutlar başarıyla senkronize edildi!")
+        for guild in bot.guilds:
+            await bot.tree.sync(guild=guild)
+        print("✅ Komutlar sunuculara anında senkronize edildi!")
     except Exception as e:
         print(f"❌ Sync hatası: {e}")
     print(f"Bot aktif edildi: {bot.user}")
@@ -361,4 +362,4 @@ if __name__ == "__main__":
     
     discord_token = os.environ.get("TOKEN")
     bot.run(discord_token)
-                                                
+    
