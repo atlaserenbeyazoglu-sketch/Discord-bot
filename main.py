@@ -1,4 +1,4 @@
-ımport discord, json, os, datetime, threading
+import discord, json, os, datetime, threading
 from discord.ext import commands
 from discord import app_commands
 from flask import Flask, render_template_string, request, redirect, url_for
