@@ -38,8 +38,10 @@ async def on_ready():
         SET[g.id]["name"] = g.name
     kaydet()
     try:
-        await bot.tree.sync()
-        print("✅ Tüm komutlar başarıyla senkronize edildi!")
+        for guild in bot.guilds:
+            bot.tree.copy_global_to(guild=guild)
+            await bot.tree.sync(guild=guild)
+        print("✅ Komutlar sunuculara anında başarıyla senkronize edildi!")
     except Exception as e:
         print(f"❌ Sync hatası: {e}")
     print(f"Bot aktif edildi: {bot.user}")
@@ -91,7 +93,7 @@ async def komutlar(interaction: discord.Interaction):
             "**/mute** - Kullanıcıya zaman aşımı uygular.\n"
             "**/unmute** - Kullanıcının susturmasını kaldırır.\n"
             "**/yavaşmod** - Kanalın yavaş mod süresini ayarlar.\n"
-            "**/kanalgörünülürlük** - Birden fazla rolün kanalı görüp görmeyeceğini ayarlar."
+            "**/kanalgörünülürlük** - Seçilen rollerin kanalı görüp görmeyeceğini ayarlar."
         ),
         inline=False
     )
@@ -160,22 +162,18 @@ async def sunucu_kur(interaction: discord.Interaction, sifre: str):
     guild = interaction.guild
     
     try:
-        # 1. Kategori: Önemli
         kat1 = await guild.create_category("「📌」Önemli")
         for isim in ["❓biz-kimiz", "❓görevlerimiz", "⬛kara-liste", "🚪gelen-giden", "👔kılık-kıyafet"]:
             await guild.create_text_channel(isim, category=kat1)
         
-        # 2. Kategori: Duyuru
         kat2 = await guild.create_category("「📢」Duyuru")
         for isim in ["📢personel-duyuru", "📢aktiflik-duyuru", "📢operasyon-duyuru", "📜kararname", "📋hiyerarşi"]:
             await guild.create_text_channel(isim, category=kat2)
 
-        # 3. Kategori: Sohbet
         kat3 = await guild.create_category("「🗨」Sohbet Kanalları")
         for isim in ["🗨sohbet", "📸galeri-kanalı", "🤖bot-komut", "🤔öneri-istek", "📤i̇stifa-i̇zin", "😴inaktiflik-izin"]:
             await guild.create_text_channel(isim, category=kat3)
             
-        # 4. Kategori: Kayıtlar
         kat4 = await guild.create_category("「🧾」Kayıtlar")
         for isim in ["🧾alım-logs", "🧾alım-sistemi", "🧾eğitim-logs", "🧾eğitim-sistemi"]:
             await guild.create_text_channel(isim, category=kat4)
@@ -365,4 +363,4 @@ if __name__ == "__main__":
     
     discord_token = os.environ.get("TOKEN")
     bot.run(discord_token)
-        
+    
