@@ -365,6 +365,3 @@ if __name__ == "__main__":
     
     discord_token = os.environ.get("TOKEN")
     bot.run(discord_token)
-
-
-Bu koda onu ekle başka hiç bişi ama başka hiç bişi elleme
