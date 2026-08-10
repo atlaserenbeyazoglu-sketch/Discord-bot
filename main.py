@@ -191,10 +191,9 @@ async def komutlar(interaction: discord.Interaction):
             "**/ayarlar** - Mevcut sunucu ayarlarını gösterir.\n"
             "**/sunucu-kur** - Kanalları tek seferde kurar (Şifre: 2904).\n"
             "**/sil** - Mesaj temizler.\n"
-            "**/kanalayazmaerişimi** - Rollerin yazma iznini ayarlar.\n"
-            "**/mute** / **/unmute** - Zaman aşımı işlemleri.\n"
-            "**/yavaşmod** - Yavaş mod ayarlar.\n"
-            "**/kanalgörünülürlük** - Kanal gizleme/gösterme."
+            "**/mute** - Kullanıcıya zaman aşımı (mute) atar.\n"
+            "**/unmute** - Kullanıcının zaman aşımını kaldırır.\n"
+            "**/yavaşmod** - Kanalın yavaş mod süresini ayarlar."
         ),
         inline=False
     )
@@ -214,6 +213,7 @@ async def ayarlar_komut(interaction: discord.Interaction):
     embed.add_field(name="Rol Log Kanalı", value=log, inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
+# --- ROL LOG SİSTEMİ (VERİLEN VE ALINAN ROLLER) ---
 @bot.event
 async def on_member_update(before, after):
     if before.roles == after.roles:
@@ -227,6 +227,7 @@ async def on_member_update(before, after):
     log_kanali = guild.get_channel(int(log_kanal_id))
     if not log_kanali:
         return
+    
     islem_yapan = "Bilinmiyor / Otomatik"
     try:
         async for entry in guild.audit_logs(limit=3, action=discord.AuditLogAction.member_role_update):
@@ -235,6 +236,8 @@ async def on_member_update(before, after):
                 break
     except:
         pass
+
+    # Verilen Roller
     for rol in [r for r in after.roles if r not in before.roles]:
         embed = discord.Embed(title="✅ Rol Verildi", color=0x57F287, timestamp=datetime.datetime.now())
         embed.add_field(name="Kullanıcı", value=after.mention, inline=False)
@@ -242,6 +245,56 @@ async def on_member_update(before, after):
         embed.add_field(name="Veren", value=islem_yapan, inline=False)
         try: await log_kanali.send(embed=embed)
         except: pass
+
+    # Alınan (Silinen) Roller
+    for rol in [r for r in before.roles if r not in after.roles]:
+        embed = discord.Embed(title="❌ Rol Alındı", color=0xED4245, timestamp=datetime.datetime.now())
+        embed.add_field(name="Kullanıcı", value=after.mention, inline=False)
+        embed.add_field(name="Alınan Rol", value=rol.mention, inline=False)
+        embed.add_field(name="Alan", value=islem_yapan, inline=False)
+        try: await log_kanali.send(embed=embed)
+        except: pass
+
+# --- MUTE (ZAMAN AŞIMI) SİSTEMİ ---
+@bot.tree.command(name="mute", description="Kullanıcıya belirtilen süre kadar zaman aşımı (mute) uygular.")
+@app_commands.describe(kullanici="Mute atılacak kullanıcı", dakika="Süre (dakika cinsinden)", sebep="Mute sebebi")
+async def mute(interaction: discord.Interaction, kullanici: discord.Member, dakika: int, sebep: str = "Sebep belirtilmedi"):
+    if not yetki_kontrol(interaction, "moderate_members"):
+        return await hata_mesaji(interaction, "Bu komutu kullanmak için 'Üyeleri Zaman Aşımına Uğrat' yetkiniz olmalı.")
+    try:
+        sure = datetime.timedelta(minutes=dakika)
+        await kullanici.timeout(sure, reason=sebep)
+        await interaction.response.send_message(f"🔇 {kullanici.mention} isimli kullanıcı başarıyla **{dakika} dakika** süreyle muteleendi. Sebep: `{sebep}`", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Mute atılırken bir hata oluştu: {e}", ephemeral=True)
+
+# --- UNMUTE SİSTEMİ ---
+@bot.tree.command(name="unmute", description="Kullanıcının zaman aşımını (mute) kaldırır.")
+@app_commands.describe(kullanici="Mutesi kaldırılacak kullanıcı")
+async def unmute(interaction: discord.Interaction, kullanici: discord.Member):
+    if not yetki_kontrol(interaction, "moderate_members"):
+        return await hata_mesaji(interaction, "Bu komutu kullanmak için 'Üyeleri Zaman Aşımına Uğrat' yetkiniz olmalı.")
+    try:
+        await kullanici.timeout(None)
+        await interaction.response.send_message(f"🔊 {kullanici.mention} isimli kullanıcının mutesi kaldırıldı.", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Mute kaldırılırken hata oluştu: {e}", ephemeral=True)
+
+# --- YAVAŞMOD (SLOWMODE) SİSTEMİ ---
+@bot.tree.command(name="yavaşmod", description="Bulunduğunuz kanalın yavaş mod süresini ayarlar.")
+@app_commands.describe(saniye="Saniye cinsinden yavaş mod süresi (0 kapatır)")
+async def yavasmod(interaction: discord.Interaction, saniye: int):
+    if not yetki_kontrol(interaction, "manage_channels"):
+        return await hata_mesaji(interaction, "Bu komutu kullanmak için 'Kanalları Yönet' yetkiniz olmalı.")
+    try:
+        await interaction.channel.slowmode_delay = saniye
+        await interaction.channel.edit(slowmode_delay=saniye)
+        if saniye == 0:
+            await interaction.response.send_message("⏱️ Bu kanaldaki yavaş mod kapatıldı.", ephemeral=True)
+        else:
+            await interaction.response.send_message(f"⏱️ Bu kanalın yavaş mod süresi **{saniye} saniye** olarak ayarlandı.", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Yavaş mod ayarlanırken hata oluştu: {e}", ephemeral=True)
 
 @bot.tree.command(name="sunucu-kur", description="Tüm kategorileri ve kanalları tek seferde kurar.")
 @app_commands.describe(sifre="Kurulum şifresi")
@@ -301,4 +354,4 @@ if __name__ == "__main__":
     
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-    
+                
