@@ -63,50 +63,65 @@ async def hata_mesaji(interaction, metin):
     else:
         await interaction.response.send_message(f"❌ {metin}", ephemeral=True)
 
-# --- GUI KONTROL PANELİ VE SEÇİM MENÜLERİ ---
+# --- GUI KONTROL PANELİ VE DOĞRU SINIF KULLANIMI ---
 class SistemYonetimView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=180)
+        
+        # Otorol Seçim Menüsü
+        role_select = discord.ui.RoleSelect(placeholder="📌 Yeni gelenler için Otorol seçin...", min_values=1, max_values=1)
+        role_select.callback = self.otorol_secim_callback
+        self.add_item(role_select)
 
-    @discord.ui.role_select(placeholder="📌 Yeni gelenler için Otorol seçin...", min_values=1, max_values=1)
-    async def otorol_secim_callback(self, interaction: discord.Interaction, select: discord.ui.RoleSelect):
+        # Hoş Geldin Kanalı Seçim Menüsü
+        hosgeldin_select = discord.ui.ChannelSelect(placeholder="🚪 Hoş geldin kanalını seçin...", channel_types=[discord.ChannelType.text], min_values=1, max_values=1)
+        hosgeldin_select.callback = self.hosgeldin_secim_callback
+        self.add_item(hosgeldin_select)
+
+        # Log Kanalı Seçim Menüsü
+        log_select = discord.ui.ChannelSelect(placeholder="🧾 Rol log kanalını seçin...", channel_types=[discord.ChannelType.text], min_values=1, max_values=1)
+        log_select.callback = self.log_secim_callback
+        self.add_item(log_select)
+
+    async def otorol_secim_callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         try:
             gid = interaction.guild.id
-            secilen_rol = select.values[0]
+            secilen_rol = interaction.data["values"][0]
+            role_obj = interaction.guild.get_role(int(secilen_rol))
             yukle()
             SET.setdefault(gid, {"name": interaction.guild.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": ""})
-            SET[gid]["otorol_id"] = str(secilen_rol.id)
+            SET[gid]["otorol_id"] = str(role_obj.id)
             kaydet()
-            await interaction.followup.send(f"✅ Otorol başarıyla **{secilen_rol.name}** olarak ayarlandı ve kaydedildi!", ephemeral=True)
+            await interaction.followup.send(f"✅ Otorol başarıyla **{role_obj.name}** olarak ayarlandı ve kaydedildi!", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"❌ Hata oluştu: {e}", ephemeral=True)
 
-    @discord.ui.channel_select(placeholder="🚪 Hoş geldin kanalını seçin...", channel_types=[discord.ChannelType.text], min_values=1, max_values=1)
-    async def hosgeldin_secim_callback(self, interaction: discord.Interaction, select: discord.ui.ChannelSelect):
+    async def hosgeldin_secim_callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         try:
             gid = interaction.guild.id
-            secilen_kanal = select.values[0]
+            secilen_id = interaction.data["values"][0]
+            kanal_obj = interaction.guild.get_channel(int(secilen_id))
             yukle()
             SET.setdefault(gid, {"name": interaction.guild.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": ""})
-            SET[gid]["hosgeldin_kanal_id"] = str(secilen_kanal.id)
+            SET[gid]["hosgeldin_kanal_id"] = str(kanal_obj.id)
             kaydet()
-            await interaction.followup.send(f"✅ Hoş geldin kanalı başarıyla {secilen_kanal.mention} olarak ayarlandı ve kaydedildi!", ephemeral=True)
+            await interaction.followup.send(f"✅ Hoş geldin kanalı başarıyla {kanal_obj.mention} olarak ayarlandı ve kaydedildi!", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"❌ Hata oluştu: {e}", ephemeral=True)
 
-    @discord.ui.channel_select(placeholder="🧾 Rol log kanalını seçin...", channel_types=[discord.ChannelType.text], min_values=1, max_values=1)
-    async def log_secim_callback(self, interaction: discord.Interaction, select: discord.ui.ChannelSelect):
+    async def log_secim_callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         try:
             gid = interaction.guild.id
-            secilen_kanal = select.values[0]
+            secilen_id = interaction.data["values"][0]
+            kanal_obj = interaction.guild.get_channel(int(secilen_id))
             yukle()
             SET.setdefault(gid, {"name": interaction.guild.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": ""})
-            SET[gid]["log_kanal_id"] = str(secilen_kanal.id)
+            SET[gid]["log_kanal_id"] = str(kanal_obj.id)
             kaydet()
-            await interaction.followup.send(f"✅ Rol log kanalı başarıyla {secilen_kanal.mention} olarak ayarlandı ve kaydedildi!", ephemeral=True)
+            await interaction.followup.send(f"✅ Rol log kanalı başarıyla {kanal_obj.mention} olarak ayarlandı ve kaydedildi!", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"❌ Hata oluştu: {e}", ephemeral=True)
 
@@ -268,3 +283,4 @@ if __name__ == "__main__":
     
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+                              
