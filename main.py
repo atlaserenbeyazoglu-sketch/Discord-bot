@@ -365,5 +365,4 @@ def server(gid):
         saved = True
         
     raw_token = os.environ.get("TOKEN", "")
-    token_masked = raw_token[:6] + "******t.run(os.environ.get("TOKEN"))
-    
+    token_masked = raw_token[:6] + "******
