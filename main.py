@@ -1,7 +1,6 @@
-import discord, json, os, datetime, threading
+import discord, json, os, datetime
 from discord.ext import commands
 from discord import app_commands
-from flask import Flask, render_template_string, request, redirect, url_for
 
 DOSYA = "ayarlar.json"
 SET = {}
@@ -44,8 +43,6 @@ async def on_ready():
         print(f"❌ Sync hatası: {e}")
     print(f"Bot aktif edildi: {bot.user}")
     print("--------------------------------------------------")
-    print("🌐 GELİŞMİŞ BOT KONTROL PANELİ AKTİF (FENDER SİSTEMİ)")
-    print("--------------------------------------------------")
 
 @bot.event
 async def on_message(message):
@@ -56,23 +53,64 @@ async def on_message(message):
             pass
     await bot.process_commands(message)
 
-# --- YETKİ KONTROL FONKSİYONLARI ---
 def yetki_kontrol(interaction, perm):
     return getattr(interaction.user.guild_permissions, perm, False)
 
 async def hata_mesaji(interaction, metin):
     await interaction.response.send_message(f"❌ {metin}", ephemeral=True)
 
-# --- 1. YARDIM VE PANEL KOMUTLARI ---
-@bot.tree.command(name="panel", description="Web kontrol paneli linkini gönderir.")
-async def panel(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="🌐 Gelişmiş Bot Kontrol Paneli", 
-        description="Sunucu ayarlarını yönetmek için panel: https://discord-bot-fa6e.onrender.com/", 
-        color=0x5865F2
-    )
+# --- 1. AYAR KOMUTLARI (Web Panelinin Yerini Alan Sistemler) ---
+@bot.tree.command(name="ayarlar", description="Sunucu için yapılan mevcut ayarları gösterir.")
+async def ayarlar_komut(interaction: discord.Interaction):
+    yukle()
+    s = SET.get(interaction.guild.id, {})
+    otorol = f"<@&{s['otorol_id']}>" if s.get('otorol_id') else "Ayarlanmamış"
+    hosgeldin = f"<#{s['hosgeldin_kanal_id']}>" if s.get('hosgeldin_kanal_id') else "Ayarlanmamış"
+    log = f"<#{s['log_kanal_id']}>" if s.get('log_kanal_id') else "Ayarlanmamış"
+
+    embed = discord.Embed(title="⚙️ Sunucu Ayarları", color=0x5865F2)
+    embed.add_field(name="Otorol", value=otorol, inline=False)
+    embed.add_field(name="Hoş Geldin Kanalı", value=hosgeldin, inline=False)
+    embed.add_field(name="Rol Log Kanalı", value=log, inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
+@bot.tree.command(name="ayar-otorol", description="Yeni gelenlere verilecek otomatik rolü ayarlar.")
+@app_commands.describe(rol="Verilecek otorol")
+async def ayar_otorol(interaction: discord.Interaction, rol: discord.Role):
+    if not yetki_kontrol(interaction, "manage_guild"):
+        return await hata_mesaji(interaction, "Bu komut için Sunucuyu Yönet yetkiniz olmalı.")
+    yukle()
+    gid = interaction.guild.id
+    SET.setdefault(gid, {"name": interaction.guild.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": ""})
+    SET[gid]["otorol_id"] = str(rol.id)
+    kaydet()
+    await interaction.response.send_message(f"✅ Otorol başarıyla {rol.mention} olarak ayarlandı.", ephemeral=True)
+
+@bot.tree.command(name="ayar-hosgeldin", description="Hoş geldin mesajlarının atılacağı kanalı ayarlar.")
+@app_commands.describe(kanal="Mesajın gönderileceği kanal")
+async def ayar_hosgeldin(interaction: discord.Interaction, kanal: discord.TextChannel):
+    if not yetki_kontrol(interaction, "manage_guild"):
+        return await hata_mesaji(interaction, "Bu komut için Sunucuyu Yönet yetkiniz olmalı.")
+    yukle()
+    gid = interaction.guild.id
+    SET.setdefault(gid, {"name": interaction.guild.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": ""})
+    SET[gid]["hosgeldin_kanal_id"] = str(kanal.id)
+    kaydet()
+    await interaction.response.send_message(f"✅ Hoş geldin kanalı {kanal.mention} olarak ayarlandı.", ephemeral=True)
+
+@bot.tree.command(name="ayar-log", description="Rol değişikliklerinin loglanacağı kanalı ayarlar.")
+@app_commands.describe(kanal="Log kanalını seçin")
+async def ayar_log(interaction: discord.Interaction, kanal: discord.TextChannel):
+    if not yetki_kontrol(interaction, "manage_guild"):
+        return await hata_mesaji(interaction, "Bu komut için Sunucuyu Yönet yetkiniz olmalı.")
+    yukle()
+    gid = interaction.guild.id
+    SET.setdefault(gid, {"name": interaction.guild.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": ""})
+    SET[gid]["log_kanal_id"] = str(kanal.id)
+    kaydet()
+    await interaction.response.send_message(f"✅ Rol log kanalı {kanal.mention} olarak ayarlandı.", ephemeral=True)
+
+# --- 2. KOMUTLAR VE YARDIM ---
 @bot.tree.command(name="komutlar", description="Sunucudaki aktif bot komutlarını gösterir.")
 async def komutlar(interaction: discord.Interaction):
     embed = discord.Embed(
@@ -81,23 +119,26 @@ async def komutlar(interaction: discord.Interaction):
         color=0x5865F2
     )
     embed.add_field(
-        name="🛠️ Yönetim ve Moderasyon",
+        name="🛠️ Yönetim, Ayarlar ve Moderasyon",
         value=(
             "**/komutlar** - Komut listesini gösterir.\n"
-            "**/panel** - Web panel linkini ve güncel yönetim detaylarını atar.\n"
+            "**/ayarlar** - Mevcut sunucu ayarlarını gösterir.\n"
+            "**/ayar-otorol** - Otorol ayarlar.\n"
+            "**/ayar-hosgeldin** - Hoş geldin kanalını ayarlar.\n"
+            "**/ayar-log** - Log kanalını ayarlar.\n"
             "**/sunucu-kur** - Tüm kategorileri ve kanalları tek seferde kurar (Şifre ister).\n"
             "**/sil** - Belirtilen miktarda mesajı temizler.\n"
-            "**/kanalayazmaerişimi** - Birden fazla rolün kanala yazma iznini tek seferde ayarlar.\n"
+            "**/kanalayazmaerişimi** - Rollerin kanala yazma iznini ayarlar.\n"
             "**/mute** - Kullanıcıya zaman aşımı uygular.\n"
-            "**/unmute** - Kullanıcının susturmasını kaldırır.\n"
-            "**/yavaşmod** - Kanalın yavaş mod süresini ayarlar.\n"
-            "**/kanalgörünülürlük** - Seçilen rollerin kanalı görüp görmeyeceğini ayarlar."
+            "**/unmute** - Susturmayı kaldırır.\n"
+            "**/yavaşmod** - Yavaş mod ayarlar.\n"
+            "**/kanalgörünülürlük** - Rollerin kanalı görüp görmeyeceğini ayarlar."
         ),
         inline=False
     )
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-# --- 2. OTOMATİK ROL DEĞİŞİM (LOG) DİNLEYİCİSİ ---
+# --- 3. OTOMATİK ROL DEĞİŞİM (LOG) DİNLEYİCİSİ ---
 @bot.event
 async def on_member_update(before, after):
     if before.roles == after.roles:
@@ -146,7 +187,7 @@ async def on_member_update(before, after):
         except:
             pass
 
-# --- 3. SUNUCU KURULUM KOMUTU ---
+# --- 4. SUNUCU KURULUM KOMUTU ---
 @bot.tree.command(name="sunucu-kur", description="Tüm kategorileri ve kanalları tek seferde kurar.")
 @app_commands.describe(sifre="Kurulum için gereken güvenlik şifresi")
 async def sunucu_kur(interaction: discord.Interaction, sifre: str):
@@ -160,22 +201,18 @@ async def sunucu_kur(interaction: discord.Interaction, sifre: str):
     guild = interaction.guild
     
     try:
-        # 1. Kategori: Önemli
         kat1 = await guild.create_category("「📌」Önemli")
         for isim in ["「❓」biz-kimiz", "「❓」görevlerimiz", "「⬛」kara-liste", "「🚪」gelen-giden", "「👔」kılık-kıyafet"]:
             await guild.create_text_channel(isim, category=kat1)
         
-        # 2. Kategori: Duyuru
         kat2 = await guild.create_category("「📢」Duyuru")
         for isim in ["「📢」personel-duyuru", "「📢」aktiflik-duyuru", "「📢」operasyon-duyuru", "「📜」kararname", "「📋」hiyerarşi"]:
             await guild.create_text_channel(isim, category=kat2)
 
-        # 3. Kategori: Sohbet
         kat3 = await guild.create_category("「🗨」Sohbet Kanalları")
         for isim in ["「🗨」sohbet", "「📸」galeri-kanalı", "「🤖」bot-komut", "「🤔」öneri-istek", "「📤」i̇stifa-i̇zin", "「😴」inaktiflik-izin"]:
             await guild.create_text_channel(isim, category=kat3)
             
-        # 4. Kategori: Kayıtlar
         kat4 = await guild.create_category("「🧾」Kayıtlar")
         for isim in ["「🧾」alım-logs", "「🧾」alım-sistemi", "「🧾」eğitim-logs", "「🧾」eğitim-sistemi"]:
             await guild.create_text_channel(isim, category=kat4)
@@ -184,7 +221,7 @@ async def sunucu_kur(interaction: discord.Interaction, sifre: str):
     except Exception as e:
         await interaction.followup.send(f"❌ Kurulum sırasında hata oluştu: {e}")
 
-# --- 4. MODERASYON KOMUTLARI ---
+# --- 5. MODERASYON KOMUTLARI ---
 @bot.tree.command(name="sil", description="Belirtilen miktarda mesajı temizler.")
 @app_commands.describe(limit="Silinecek mesaj sayısı")
 async def sil(interaction: discord.Interaction, limit: int = 5):
@@ -302,67 +339,10 @@ async def on_member_join(member):
             except:
                 pass
 
-# --- ULTRA TEKNOLOJİK WEB PANELİ & SÜREKLİ AKTİF FENDER SİSTEMİ ---
-app = Flask(__name__)
-
-LOGIN_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Güvenli Giriş</title><style>body{background:#1e1f22;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.box{background:#2b2d31;padding:40px;border-radius:12px;width:320px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.5);}input,button{width:100%;padding:12px;margin:12px 0;background:#1e1f22;color:#fff;border:1px solid #444;border-radius:6px;box-sizing:border-box;font-size:16px;}button{background:#5865f2;font-weight:bold;cursor:pointer;transition:background 0.2s;}button:hover{background:#4752c4;}.err{color:#ed4245;font-size:14px;margin-bottom:10px;}</style></head><body><div class="box"><h2>🛡️ Güvenli Panel</h2>{% if error %}<p class="err">{{error}}</p>{% endif %}<form method="POST"><input type="password" name="password" placeholder="Şifrenizi Girin" required><button type="submit">Sisteme Bağlan</button></form></div></body></html>"""
-
-INDEX_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Ultra Panel</title><style>body{background:#1e1f22;color:#fff;font-family:sans-serif;padding:30px;}.box{max-width:600px;margin:auto;background:#2b2d31;padding:30px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.5);}.card{background:#111;padding:15px;margin-bottom:12px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;}.btn{background:#5865f2;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold;}.sync-btn{background:#57F287;color:#111;display:block;text-align:center;margin-bottom:15px;padding:12px;border-radius:6px;text-decoration:none;font-weight:bold;}.logout{color:#ed4245;text-decoration:none;float:right;font-size:14px;font-weight:bold;}.token-box{margin-top:25px;background:#111;padding:15px;border-radius:8px;font-size:13px;word-break:break-all;color:#b9bbbe;text-align:center;}</style></head><body><div class="box"><a href="/logout" class="logout">Oturumu Kapat</a><h2>🤖 Sunucu Seçimi</h2><hr style="border:0;border-top:1px solid #444;margin:15px 0;"><a href="/sync" class="sync-btn">🔄 Komutları Webden Senkronize Et</a>{% for g in guilds %}<div class="card"><span>📢 {{g.name}}</span><a href="/server/{{g.id}}" class="btn">Yönet</a></div>{% endfor %}<div class="token-box">🔑 <b>Aktif Token:</b> {{token_masked}}</div></div></body></html>"""
-
-SERVER_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Sunucu Ayarları</title><style>body{background:#1e1f22;color:#fff;font-family:sans-serif;padding:30px;}.box{max-width:600px;margin:auto;background:#2b2d31;padding:30px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.5);}select,button{width:100%;padding:12px;margin:12px 0;background:#1e1f22;color:#fff;border:1px solid #444;border-radius:6px;font-size:16px;}button{background:#57F287;color:#111;font-weight:bold;cursor:pointer;transition:background 0.2s;}button:hover{background:#45b66c;}.back{display:inline-block;margin-bottom:15px;color:#00aff4;text-decoration:none;font-weight:bold;}.logout{color:#ed4245;text-decoration:none;float:right;font-size:14px;font-weight:bold;}.alert{background:#57F287;color:#111;padding:10px;border-radius:6px;text-align:center;font-weight:bold;margin-bottom:15px;}.token-box{margin-top:25px;background:#111;padding:15px;border-radius:8px;font-size:13px;word-break:break-all;color:#b9bbbe;text-align:center;}</style></head><body><div class="box"><a href="/logout" class="logout">Oturumu Kapat</a><a href="/" class="back">⬅️ Geri Dön</a><h2>⚙️ {{g.name}} Yönetim</h2><hr style="border:0;border-top:1px solid #444;margin:15px 0;">{% if saved %}<div class="alert">✅ Ayarlar kalıcı olarak kaydedildi!</div>{% endif %}<form method="POST"><label>Otorol:</label><select name="otorol_id"><option value="">-- Seçilmedi --</option>{% for r in g.roles %}{% if r.name != "@everyone" %}<option value="{{r.id}}" {% if set.get('otorol_id')|string == r.id|string %}selected{% endif %}>{{r.name}}</option>{% endif %}{% endfor %}</select><label>Hoş Geldin Kanalı:</label><select name="hosgeldin_kanal_id"><option value="">-- Seçilmedi --</option>{% for c in g.text_channels %}<option value="{{c.id}}" {% if set.get('hosgeldin_kanal_id')|string == c.id|string %}selected{% endif %}>#{{c.name}}</option>{% endfor %}</select><label>Rol Log Kanalı:</label><select name="log_kanal_id"><option value="">-- Seçilmedi --</option>{% for c in g.text_channels %}<option value="{{c.id}}" {% if set.get('log_kanal_id')|string == c.id|string %}selected{% endif %}>#{{c.name}}</option>{% endfor %}</select><button type="submit">Değişiklikleri Kalıcı Kaydet</button></form><div class="token-box">🔑 <b>Aktif Token:</b> {{token_masked}}</div></div></body></html>"""
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    error = None
-    if request.method == "POST":
-        if request.form.get("password") == "2904":
-            response = redirect(url_for("index"))
-            response.set_cookie("secure_auth", "ultra_secure_token_2904_active", max_age=60*60*24*365)
-            return response
-        else:
-            error = "Hatalı Güvenlik Şifresi!"
-    return render_template_string(LOGIN_H, error=error)
-
-@app.route("/logout")
-def logout():
-    response = redirect(url_for("login"))
-    response.set_cookie("secure_auth", "", expires=0)
-    return response
-
-@app.route("/")
-def index():
-    if request.cookies.get("secure_auth") != "ultra_secure_token_2904_active":
-        return redirect(url_for("login"))
-    yukle()
-    raw_token = os.environ.get("TOKEN", "")
-    token_masked = raw_token[:6] + "************************" if len(raw_token) > 6 else "Gizli / Bulunamadı"
-    return render_template_string(INDEX_H, guilds=bot.guilds, token_masked=token_masked)
-
-@app.route("/sync")
-def web_sync():
-    if request.cookies.get("secure_auth") != "ultra_secure_token_2904_active":
-        return redirect(url_for("login"))
+if __name__ == "__main__":
+    discord_token = os.environ.get("TOKEN")
+    if discord_token:
+        bot.run(discord_token)
+    else:
+        print("❌ HATA: TOKEN bulunamadı!")
     
-    import asyncio
-    asyncio.run_coroutine_threadsafe(bot.tree.sync(), bot.loop)
-    return redirect(url_for("index"))
-
-@app.route("/server/<int:gid>", methods=["GET", "POST"])
-def server(gid):
-    if request.cookies.get("secure_auth") != "ultra_secure_token_2904_active":
-        return redirect(url_for("login"))
-    
-    yukle()
-    g = bot.get_guild(gid)
-    if not g:
-        return "Bulunamadı", 404
-        
-    SET.setdefault(gid, {"name": g.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": ""})
-    saved = False
-    
-    if request.method == "POST":
-        SET[gid]["name"] = g.name
-        SET[gid]["otorol_id"] = request.form.get("otorol_id", "")
-        SET[gid]["hosgeldin_kanal_id"] = request.form.get("hosgeldin_kanal_id", "")
-        SET[gid]["log_kanal_id"] = request.form.get("log_kanal_id", "")
-        kay
