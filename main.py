@@ -365,4 +365,4 @@ def server(gid):
         SET[gid]["otorol_id"] = request.form.get("otorol_id", "")
         SET[gid]["hosgeldin_kanal_id"] = request.form.get("hosgeldin_kanal_id", "")
         SET[gid]["log_kanal_id"] = request.form.get("log_kanal_id", "")
-        kay
+        kay,     
