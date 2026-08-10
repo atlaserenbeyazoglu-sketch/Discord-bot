@@ -213,7 +213,7 @@ async def ayarlar_komut(interaction: discord.Interaction):
     embed.add_field(name="Rol Log Kanalı", value=log, inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-# --- ROL LOG SİSTEMİ (VERİLEN VE ALINAN ROLLER) ---
+# --- ROL LOG SİSTEMİ (VERİLEN VE ALINAN ROLLER DÜZELTİLDİ) ---
 @bot.event
 async def on_member_update(before, after):
     if before.roles == after.roles:
@@ -280,14 +280,13 @@ async def unmute(interaction: discord.Interaction, kullanici: discord.Member):
     except Exception as e:
         await interaction.response.send_message(f"❌ Mute kaldırılırken hata oluştu: {e}", ephemeral=True)
 
-# --- YAVAŞMOD (SLOWMODE) SİSTEMİ ---
+# --- YAVAŞMOD (SLOWMODE) SİSTEMİ DÜZELTİLDİ ---
 @bot.tree.command(name="yavaşmod", description="Bulunduğunuz kanalın yavaş mod süresini ayarlar.")
 @app_commands.describe(saniye="Saniye cinsinden yavaş mod süresi (0 kapatır)")
 async def yavasmod(interaction: discord.Interaction, saniye: int):
     if not yetki_kontrol(interaction, "manage_channels"):
         return await hata_mesaji(interaction, "Bu komutu kullanmak için 'Kanalları Yönet' yetkiniz olmalı.")
     try:
-        await interaction.channel.slowmode_delay = saniye
         await interaction.channel.edit(slowmode_delay=saniye)
         if saniye == 0:
             await interaction.response.send_message("⏱️ Bu kanaldaki yavaş mod kapatıldı.", ephemeral=True)
@@ -354,4 +353,4 @@ if __name__ == "__main__":
     
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-                
+    
