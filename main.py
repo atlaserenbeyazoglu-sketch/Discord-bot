@@ -1,6 +1,7 @@
-import discord, json, os, datetime
+import discord, json, os, datetime, threading
 from discord.ext import commands
 from discord import app_commands
+from flask import Flask
 
 DOSYA = "ayarlar.json"
 SET = {}
@@ -59,7 +60,34 @@ def yetki_kontrol(interaction, perm):
 async def hata_mesaji(interaction, metin):
     await interaction.response.send_message(f"❌ {metin}", ephemeral=True)
 
-# --- 1. AYAR KOMUTLARI (Web Panelinin Yerini Alan Sistemler) ---
+# --- 1. AYAR VE YARDIM KOMUTLARI ---
+@bot.tree.command(name="komutlar", description="Sunucudaki aktif bot komutlarını gösterir.")
+async def komutlar(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="📜 Bot Komut Listesi",
+        description="Aşağıdan mevcut tüm komutları inceleyebilirsin:",
+        color=0x5865F2
+    )
+    embed.add_field(
+        name="🛠️ Yönetim, Ayarlar ve Moderasyon",
+        value=(
+            "**/komutlar** - Komut listesini gösterir.\n"
+            "**/ayarlar** - Mevcut sunucu ayarlarını gösterir.\n"
+            "**/ayar-otorol** - Otorol ayarlar.\n"
+            "**/ayar-hosgeldin** - Hoş geldin kanalını ayarlar.\n"
+            "**/ayar-log** - Log kanalını ayarlar.\n"
+            "**/sunucu-kur** - Tüm kategorileri ve kanalları tek seferde kurar (Şifre ister).\n"
+            "**/sil** - Belirtilen miktarda mesajı temizler.\n"
+            "**/kanalayazmaerişimi** - Rollerin kanala yazma iznini ayarlar.\n"
+            "**/mute** - Kullanıcıya zaman aşımı uygular.\n"
+            "**/unmute** - Susturmayı kaldırır.\n"
+            "**/yavaşmod** - Yavaş mod ayarlar.\n"
+            "**/kanalgörünülürlük** - Rollerin kanalı görüp görmeyeceğini ayarlar."
+        ),
+        inline=False
+    )
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
 @bot.tree.command(name="ayarlar", description="Sunucu için yapılan mevcut ayarları gösterir.")
 async def ayarlar_komut(interaction: discord.Interaction):
     yukle()
@@ -110,35 +138,7 @@ async def ayar_log(interaction: discord.Interaction, kanal: discord.TextChannel)
     kaydet()
     await interaction.response.send_message(f"✅ Rol log kanalı {kanal.mention} olarak ayarlandı.", ephemeral=True)
 
-# --- 2. KOMUTLAR VE YARDIM ---
-@bot.tree.command(name="komutlar", description="Sunucudaki aktif bot komutlarını gösterir.")
-async def komutlar(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="📜 Bot Komut Listesi",
-        description="Aşağıdan mevcut tüm komutları inceleyebilirsin:",
-        color=0x5865F2
-    )
-    embed.add_field(
-        name="🛠️ Yönetim, Ayarlar ve Moderasyon",
-        value=(
-            "**/komutlar** - Komut listesini gösterir.\n"
-            "**/ayarlar** - Mevcut sunucu ayarlarını gösterir.\n"
-            "**/ayar-otorol** - Otorol ayarlar.\n"
-            "**/ayar-hosgeldin** - Hoş geldin kanalını ayarlar.\n"
-            "**/ayar-log** - Log kanalını ayarlar.\n"
-            "**/sunucu-kur** - Tüm kategorileri ve kanalları tek seferde kurar (Şifre ister).\n"
-            "**/sil** - Belirtilen miktarda mesajı temizler.\n"
-            "**/kanalayazmaerişimi** - Rollerin kanala yazma iznini ayarlar.\n"
-            "**/mute** - Kullanıcıya zaman aşımı uygular.\n"
-            "**/unmute** - Susturmayı kaldırır.\n"
-            "**/yavaşmod** - Yavaş mod ayarlar.\n"
-            "**/kanalgörünülürlük** - Rollerin kanalı görüp görmeyeceğini ayarlar."
-        ),
-        inline=False
-    )
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
-# --- 3. OTOMATİK ROL DEĞİŞİM (LOG) DİNLEYİCİSİ ---
+# --- 2. OTOMATİK ROL DEĞİŞİM (LOG) DİNLEYİCİSİ ---
 @bot.event
 async def on_member_update(before, after):
     if before.roles == after.roles:
@@ -187,7 +187,7 @@ async def on_member_update(before, after):
         except:
             pass
 
-# --- 4. SUNUCU KURULUM KOMUTU ---
+# --- 3. SUNUCU KURULUM KOMUTU ---
 @bot.tree.command(name="sunucu-kur", description="Tüm kategorileri ve kanalları tek seferde kurar.")
 @app_commands.describe(sifre="Kurulum için gereken güvenlik şifresi")
 async def sunucu_kur(interaction: discord.Interaction, sifre: str):
@@ -221,7 +221,7 @@ async def sunucu_kur(interaction: discord.Interaction, sifre: str):
     except Exception as e:
         await interaction.followup.send(f"❌ Kurulum sırasında hata oluştu: {e}")
 
-# --- 5. MODERASYON KOMUTLARI ---
+# --- 4. MODERASYON KOMUTLARI ---
 @bot.tree.command(name="sil", description="Belirtilen miktarda mesajı temizler.")
 @app_commands.describe(limit="Silinecek mesaj sayısı")
 async def sil(interaction: discord.Interaction, limit: int = 5):
@@ -319,7 +319,7 @@ async def kanalgörünülürlük(
     liste_str = ", ".join([f"**{name}**" for name in rol_isimleri])
     await interaction.response.send_message(f"👁️ Kanal görünürlük ayarları güncellendi: {liste_str} rolleri için kanal artık {islem_metni}.")
 
-# --- ÜYE ETKİNLİKLERİ ---
+# --- 5. ÜYE ETKİNLİKLERİ ---
 @bot.event
 async def on_member_join(member):
     yukle()
@@ -339,10 +339,20 @@ async def on_member_join(member):
             except:
                 pass
 
+# --- RENDER PORT HATASINI ÖNLEYEN MİNİ WEB SUNUCUSU ---
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Bot ve Sistemler Aktif!"
+
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=port, use_reloader=False), daemon=True).start()
+    
     discord_token = os.environ.get("TOKEN")
     if discord_token:
         bot.run(discord_token)
     else:
         print("❌ HATA: TOKEN bulunamadı!")
-    
+        
