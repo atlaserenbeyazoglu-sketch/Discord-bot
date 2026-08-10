@@ -56,12 +56,14 @@ async def on_message(message):
             pass
     await bot.process_commands(message)
 
+# --- YETKİ KONTROL FONKSİYONLARI ---
 def yetki_kontrol(interaction, perm):
     return getattr(interaction.user.guild_permissions, perm, False)
 
 async def hata_mesaji(interaction, metin):
     await interaction.response.send_message(f"❌ {metin}", ephemeral=True)
 
+# --- 1. YARDIM VE PANEL KOMUTLARI ---
 @bot.tree.command(name="panel", description="Web kontrol paneli linkini gönderir.")
 async def panel(interaction: discord.Interaction):
     embed = discord.Embed(
@@ -95,6 +97,7 @@ async def komutlar(interaction: discord.Interaction):
     )
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
+# --- 2. OTOMATİK ROL DEĞİŞİM (LOG) DİNLEYİCİSİ ---
 @bot.event
 async def on_member_update(before, after):
     if before.roles == after.roles:
@@ -143,6 +146,7 @@ async def on_member_update(before, after):
         except:
             pass
 
+# --- 3. SUNUCU KURULUM KOMUTU ---
 @bot.tree.command(name="sunucu-kur", description="Tüm kategorileri ve kanalları tek seferde kurar.")
 @app_commands.describe(sifre="Kurulum için gereken güvenlik şifresi")
 async def sunucu_kur(interaction: discord.Interaction, sifre: str):
@@ -156,18 +160,22 @@ async def sunucu_kur(interaction: discord.Interaction, sifre: str):
     guild = interaction.guild
     
     try:
+        # 1. Kategori: Önemli
         kat1 = await guild.create_category("「📌」Önemli")
         for isim in ["「❓」biz-kimiz", "「❓」görevlerimiz", "「⬛」kara-liste", "「🚪」gelen-giden", "「👔」kılık-kıyafet"]:
             await guild.create_text_channel(isim, category=kat1)
         
+        # 2. Kategori: Duyuru
         kat2 = await guild.create_category("「📢」Duyuru")
         for isim in ["「📢」personel-duyuru", "「📢」aktiflik-duyuru", "「📢」operasyon-duyuru", "「📜」kararname", "「📋」hiyerarşi"]:
             await guild.create_text_channel(isim, category=kat2)
 
+        # 3. Kategori: Sohbet
         kat3 = await guild.create_category("「🗨」Sohbet Kanalları")
         for isim in ["「🗨」sohbet", "「📸」galeri-kanalı", "「🤖」bot-komut", "「🤔」öneri-istek", "「📤」i̇stifa-i̇zin", "「😴」inaktiflik-izin"]:
             await guild.create_text_channel(isim, category=kat3)
             
+        # 4. Kategori: Kayıtlar
         kat4 = await guild.create_category("「🧾」Kayıtlar")
         for isim in ["「🧾」alım-logs", "「🧾」alım-sistemi", "「🧾」eğitim-logs", "「🧾」eğitim-sistemi"]:
             await guild.create_text_channel(isim, category=kat4)
@@ -176,6 +184,7 @@ async def sunucu_kur(interaction: discord.Interaction, sifre: str):
     except Exception as e:
         await interaction.followup.send(f"❌ Kurulum sırasında hata oluştu: {e}")
 
+# --- 4. MODERASYON KOMUTLARI ---
 @bot.tree.command(name="sil", description="Belirtilen miktarda mesajı temizler.")
 @app_commands.describe(limit="Silinecek mesaj sayısı")
 async def sil(interaction: discord.Interaction, limit: int = 5):
@@ -273,6 +282,7 @@ async def kanalgörünülürlük(
     liste_str = ", ".join([f"**{name}**" for name in rol_isimleri])
     await interaction.response.send_message(f"👁️ Kanal görünürlük ayarları güncellendi: {liste_str} rolleri için kanal artık {islem_metni}.")
 
+# --- ÜYE ETKİNLİKLERİ ---
 @bot.event
 async def on_member_join(member):
     yukle()
@@ -292,10 +302,13 @@ async def on_member_join(member):
             except:
                 pass
 
+# --- ULTRA TEKNOLOJİK WEB PANELİ & SÜREKLİ AKTİF FENDER SİSTEMİ ---
 app = Flask(__name__)
 
 LOGIN_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Güvenli Giriş</title><style>body{background:#1e1f22;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.box{background:#2b2d31;padding:40px;border-radius:12px;width:320px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.5);}input,button{width:100%;padding:12px;margin:12px 0;background:#1e1f22;color:#fff;border:1px solid #444;border-radius:6px;box-sizing:border-box;font-size:16px;}button{background:#5865f2;font-weight:bold;cursor:pointer;transition:background 0.2s;}button:hover{background:#4752c4;}.err{color:#ed4245;font-size:14px;margin-bottom:10px;}</style></head><body><div class="box"><h2>🛡️ Güvenli Panel</h2>{% if error %}<p class="err">{{error}}</p>{% endif %}<form method="POST"><input type="password" name="password" placeholder="Şifrenizi Girin" required><button type="submit">Sisteme Bağlan</button></form></div></body></html>"""
+
 INDEX_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Ultra Panel</title><style>body{background:#1e1f22;color:#fff;font-family:sans-serif;padding:30px;}.box{max-width:600px;margin:auto;background:#2b2d31;padding:30px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.5);}.card{background:#111;padding:15px;margin-bottom:12px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;}.btn{background:#5865f2;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold;}.sync-btn{background:#57F287;color:#111;display:block;text-align:center;margin-bottom:15px;padding:12px;border-radius:6px;text-decoration:none;font-weight:bold;}.logout{color:#ed4245;text-decoration:none;float:right;font-size:14px;font-weight:bold;}.token-box{margin-top:25px;background:#111;padding:15px;border-radius:8px;font-size:13px;word-break:break-all;color:#b9bbbe;text-align:center;}</style></head><body><div class="box"><a href="/logout" class="logout">Oturumu Kapat</a><h2>🤖 Sunucu Seçimi</h2><hr style="border:0;border-top:1px solid #444;margin:15px 0;"><a href="/sync" class="sync-btn">🔄 Komutları Webden Senkronize Et</a>{% for g in guilds %}<div class="card"><span>📢 {{g.name}}</span><a href="/server/{{g.id}}" class="btn">Yönet</a></div>{% endfor %}<div class="token-box">🔑 <b>Aktif Token:</b> {{token_masked}}</div></div></body></html>"""
+
 SERVER_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Sunucu Ayarları</title><style>body{background:#1e1f22;color:#fff;font-family:sans-serif;padding:30px;}.box{max-width:600px;margin:auto;background:#2b2d31;padding:30px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.5);}select,button{width:100%;padding:12px;margin:12px 0;background:#1e1f22;color:#fff;border:1px solid #444;border-radius:6px;font-size:16px;}button{background:#57F287;color:#111;font-weight:bold;cursor:pointer;transition:background 0.2s;}button:hover{background:#45b66c;}.back{display:inline-block;margin-bottom:15px;color:#00aff4;text-decoration:none;font-weight:bold;}.logout{color:#ed4245;text-decoration:none;float:right;font-size:14px;font-weight:bold;}.alert{background:#57F287;color:#111;padding:10px;border-radius:6px;text-align:center;font-weight:bold;margin-bottom:15px;}.token-box{margin-top:25px;background:#111;padding:15px;border-radius:8px;font-size:13px;word-break:break-all;color:#b9bbbe;text-align:center;}</style></head><body><div class="box"><a href="/logout" class="logout">Oturumu Kapat</a><a href="/" class="back">⬅️ Geri Dön</a><h2>⚙️ {{g.name}} Yönetim</h2><hr style="border:0;border-top:1px solid #444;margin:15px 0;">{% if saved %}<div class="alert">✅ Ayarlar kalıcı olarak kaydedildi!</div>{% endif %}<form method="POST"><label>Otorol:</label><select name="otorol_id"><option value="">-- Seçilmedi --</option>{% for r in g.roles %}{% if r.name != "@everyone" %}<option value="{{r.id}}" {% if set.get('otorol_id')|string == r.id|string %}selected{% endif %}>{{r.name}}</option>{% endif %}{% endfor %}</select><label>Hoş Geldin Kanalı:</label><select name="hosgeldin_kanal_id"><option value="">-- Seçilmedi --</option>{% for c in g.text_channels %}<option value="{{c.id}}" {% if set.get('hosgeldin_kanal_id')|string == c.id|string %}selected{% endif %}>#{{c.name}}</option>{% endfor %}</select><label>Rol Log Kanalı:</label><select name="log_kanal_id"><option value="">-- Seçilmedi --</option>{% for c in g.text_channels %}<option value="{{c.id}}" {% if set.get('log_kanal_id')|string == c.id|string %}selected{% endif %}>#{{c.name}}</option>{% endfor %}</select><button type="submit">Değişiklikleri Kalıcı Kaydet</button></form><div class="token-box">🔑 <b>Aktif Token:</b> {{token_masked}}</div></div></body></html>"""
 
 @app.route("/login", methods=["GET", "POST"])
@@ -329,6 +342,7 @@ def index():
 def web_sync():
     if request.cookies.get("secure_auth") != "ultra_secure_token_2904_active":
         return redirect(url_for("login"))
+    
     import asyncio
     asyncio.run_coroutine_threadsafe(bot.tree.sync(), bot.loop)
     return redirect(url_for("index"))
@@ -337,23 +351,18 @@ def web_sync():
 def server(gid):
     if request.cookies.get("secure_auth") != "ultra_secure_token_2904_active":
         return redirect(url_for("login"))
+    
     yukle()
     g = bot.get_guild(gid)
     if not g:
         return "Bulunamadı", 404
+        
     SET.setdefault(gid, {"name": g.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": ""})
     saved = False
+    
     if request.method == "POST":
         SET[gid]["name"] = g.name
         SET[gid]["otorol_id"] = request.form.get("otorol_id", "")
         SET[gid]["hosgeldin_kanal_id"] = request.form.get("hosgeldin_kanal_id", "")
         SET[gid]["log_kanal_id"] = request.form.get("log_kanal_id", "")
-        kaydet()
-        saved = True
-    raw_token = os.environ.get("TOKEN", "")
-    token_masked = raw_token[:6] + "************************" if len(raw_token) > 6 else "Gizli / Bulunamadı"
-    return render_template_string(SERVER_H, g=g, set=SET[gid], saved=saved, token_masked=token_masked)
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=port, use_reloader=
+        kay
