@@ -60,12 +60,11 @@ def yetki_kontrol(interaction, perm):
 async def hata_mesaji(interaction, metin):
     await interaction.response.send_message(f"❌ {metin}", ephemeral=True)
 
-# --- GELİŞMİŞ DİSCORD GUI KONTROL PANELİ SİSTEMİ ---
-
+# --- GELİŞMİŞ DİSCORD GUI KONTROL PANELİ VE MENÜLERİ ---
 class SistemYonetimView(discord.ui.View):
-    def __init__(self, guild):
+    def __init__(self):
         super().__init__(timeout=180)
-        
+
         # Otorol Seçim Menüsü
         role_select = discord.ui.RoleSelect(placeholder="📌 Yeni gelenler için Otorol seçin...", min_values=1, max_values=1)
         role_select.callback = self.otorol_secim_callback
@@ -109,10 +108,11 @@ class SistemYonetimView(discord.ui.View):
         await interaction.response.send_message(f"✅ Rol log kanalı başarıyla {secilen_kanal.mention} olarak ayarlandı ve kaydedildi!", ephemeral=True)
 
 
+# --- ŞİFRE DOĞRULAMA MODALI ---
 class SifreModal(discord.ui.Modal, title="🛡️ Güvenlik Doğrulaması"):
     sifre_input = discord.ui.TextInput(
         label="Panel Şifresi",
-        placeholder="4 haneli şifreyi girin (2904)...",
+        placeholder="Şifreyi girin...",
         style=discord.TextStyle.short,
         required=True,
         max_length=10
@@ -132,41 +132,27 @@ class SifreModal(discord.ui.Modal, title="🛡️ Güvenlik Doğrulaması"):
 
         embed = discord.Embed(
             title="⚙️ Gelişmiş Sunucu Yönetim Paneli",
-            description="Aşağıdaki interaktif menüleri kullanarak sunucu sistemlerini anında yapılandırabilirsin. Yapılan değişiklikler **kalıcı olarak** saklanır.",
+            description="Aşağıdaki interaktif menüleri kullanarak sistemleri yapılandırabilirsin. Seçtiğin her şey **kalıcı olarak** kaydedilir.",
             color=0x5865F2
         )
         embed.add_field(name="📌 Mevcut Otorol", value=otorol_adi, inline=False)
         embed.add_field(name="🚪 Mevcut Hoş Geldin Kanalı", value=hosgeldin_kanali, inline=False)
         embed.add_field(name="🧾 Mevcut Rol Log Kanalı", value=log_kanali, inline=False)
-        embed.set_footer(text="Yeni Nesil Discord GUI Sistemi • Güvenli Oturum Açıldı")
+        embed.set_footer(text="Discord GUI Sistemi • Kalıcı Hafıza Aktif")
 
-        await interaction.response.send_message(embed=embed, view=SistemYonetimView(interaction.guild), ephemeral=True)
-
-
-class PanelGirisView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    @discord.ui.button(label="🔐 Kontrol Paneline Giriş Yap", style=discord.ButtonStyle.primary, emoji="🚀")
-    async def giris_yap(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not yetki_kontrol(interaction, "manage_guild"):
-            return await interaction.response.send_message("❌ Bu paneli açmak için 'Sunucuyu Yönet' yetkiniz olmalı.", ephemeral=True)
-        await interaction.response.send_modal(SifreModal())
+        await interaction.response.send_message(embed=embed, view=SistemYonetimView(), ephemeral=True)
 
 
-@bot.tree.command(name="panel", description="Şifreli yeni nesil Discord GUI yönetim panelini açar.")
-async def panel_komut(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="🌐 Ultra Teknolojik Sunucu Yönetim Paneli",
-        description="Aşağıdaki butona tıklayıp şifreyi girerek sunucu sistemlerini (Otorol, Hoş Geldin, Log) tamamen Discord içinden yönetebileceğin arayüze ulaşabilirsin.",
-        color=0x5865F2
-    )
-    embed.set_footer(text="Fender & Bot GUI Sistemi")
-    await interaction.response.send_message(embed=embed, view=PanelGirisView(), ephemeral=True)
+# --- ÖZEL KONTROL PANELİ KOMUTU ---
+@bot.tree.command(name="özelkontrolpaneli", description="Şifre ile korunan gelişmiş Discord GUI kontrol panelini açar.")
+async def ozel_kontrol_paneli(interaction: discord.Interaction):
+    if not yetki_kontrol(interaction, "manage_guild"):
+        return await hata_mesaji(interaction, "Bu paneli açmak için 'Sunucuyu Yönet' yetkiniz olmalı.")
+    await interaction.response.send_modal(SifreModal())
 
 
-# --- DİĞER KOMUTLAR VE SİSTEMLER ---
-@bot.tree.command(name="komutlar", description="Sunucudaki aktif bot komutlarını gösterir.")
+# --- DİĞER TEMEL SİSTEMLER VE KOMUTLAR ---
+@bot.tree.command(name="komutlar", description="Aktif bot komutlarını gösterir.")
 async def komutlar(interaction: discord.Interaction):
     embed = discord.Embed(
         title="📜 Bot Komut Listesi",
@@ -174,9 +160,9 @@ async def komutlar(interaction: discord.Interaction):
         color=0x5865F2
     )
     embed.add_field(
-        name="🛠️ Yönetim ve Sistemler",
+        name="🛠️ Komutlar",
         value=(
-            "**/panel** - Şifreli Discord GUI yönetim panelini açar.\n"
+            "**/özelkontrolpaneli** - Şifreli Discord GUI yönetim panelini açar.\n"
             "**/komutlar** - Komut listesini gösterir.\n"
             "**/ayarlar** - Mevcut sunucu ayarlarını gösterir.\n"
             "**/sunucu-kur** - Kanalları tek seferde kurar (Şifre: 2904).\n"
@@ -274,7 +260,7 @@ async def on_member_join(member):
             try: await kanal.send(f"Hoş geldin {member.mention}! Toplam **{member.guild.member_count}** kişiyiz.")
             except: pass
 
-# --- RENDER PORT HATASINI ÖNLEYEN SİTE (Sadece "Bot Aktif!" yazar) ---
+# --- RENDER PORT HATASINI ÖNLEYEN BASİT SİTE ---
 app = Flask(__name__)
 
 @app.route("/")
@@ -287,10 +273,8 @@ if __name__ == "__main__":
         print("❌ HATA: TOKEN bulunamadı!")
         exit(1)
 
-    # Botu arka planda thread olarak başlatıyoruz
     threading.Thread(target=lambda: bot.run(discord_token), daemon=True).start()
     
-    # Sitede sadece "Bot Aktif!" yazacak şekilde Flask portunu açıyoruz (Render port hatası vermez)
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
     
