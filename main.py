@@ -298,7 +298,7 @@ async def on_member_join(member):
             except:
                 pass
 
-# --- ULTRA TEKNOLOJİK WEB PANELİ & SÜREKLİ AKTİF FENDER SİSTEMİ ---
+# --- KONTROL PANELİ (FLASK) ---
 app = Flask(__name__)
 
 LOGIN_H = """<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Güvenli Giriş</title><style>body{background:#1e1f22;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}.box{background:#2b2d31;padding:40px;border-radius:12px;width:320px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.5);}input,button{width:100%;padding:12px;margin:12px 0;background:#1e1f22;color:#fff;border:1px solid #444;border-radius:6px;box-sizing:border-box;font-size:16px;}button{background:#5865f2;font-weight:bold;cursor:pointer;transition:background 0.2s;}button:hover{background:#4752c4;}.err{color:#ed4245;font-size:14px;margin-bottom:10px;}</style></head><body><div class="box"><h2>🛡️ Güvenli Panel</h2>{% if error %}<p class="err">{{error}}</p>{% endif %}<form method="POST"><input type="password" name="password" placeholder="Şifrenizi Girin" required><button type="submit">Sisteme Bağlan</button></form></div></body></html>"""
@@ -365,4 +365,4 @@ def server(gid):
         saved = True
         
     raw_token = os.environ.get("TOKEN", "")
-    token_masked = raw_token[:6] + "******
+    token_masked = raw_token[:6] + "************************" if len(raw_token
