@@ -60,7 +60,7 @@ def yetki_kontrol(interaction, perm):
 async def hata_mesaji(interaction, metin):
     await interaction.response.send_message(f"❌ {metin}", ephemeral=True)
 
-# --- YENİ NESİL DİSCORD GUI (ŞİFRELİ KONTROL PANELİ) ---
+# --- DİSCORD GUI (ŞİFRELİ MODAL PANELİ) ---
 class AyarModal(discord.ui.Modal, title="⚙️ Gelişmiş Sunucu Ayar Paneli"):
     otorol_input = discord.ui.TextInput(
         label="Otorol ID",
@@ -134,7 +134,7 @@ class PanelArayuzView(discord.ui.View):
 async def panel_komut(interaction: discord.Interaction):
     embed = discord.Embed(
         title="🌐 Ultra Teknolojik Sunucu Yönetim Paneli",
-        description="Aşağıdaki butona tıklayarak güvenli şifre ekranına ulaşabilir ve Otorol, Hoş Geldin, Log ayarlarını kalıcı olarak yönetebilirsiniz.",
+        description="Aşağıdaki butona tıklayarak güvenli şifre ekranına ulaşabilir ve Otorol, Hoş Geldin, Log ayarlarını Discord içinden kalıcı olarak yönetebilirsiniz.",
         color=0x5865F2
     )
     embed.set_footer(text="Discord GUI Sistemi • Kalıcı Hafıza Aktif")
@@ -420,7 +420,7 @@ async def on_member_join(member):
             except:
                 pass
 
-# --- RENDER PORT HATASINI KESİN ÇÖZEN YAPI ---
+# --- RENDER PORT HATASINI ÖNLEYEN "BOT AKTİF" WEB SUNUCUSU ---
 app = Flask(__name__)
 
 @app.route("/")
@@ -436,7 +436,6 @@ if __name__ == "__main__":
     # Discord botunu arka planda thread olarak başlatıyoruz
     threading.Thread(target=lambda: bot.run(discord_token), daemon=True).start()
     
-    # Flask sunucusunu ana akışta (main thread) çalıştırarak Render'ın portu hemen görmesini sağlıyoruz
+    # Sitede sadece "Bot Aktif!" yazacak şekilde Flask portunu açıyoruz
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-        
