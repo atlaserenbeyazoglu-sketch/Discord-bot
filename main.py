@@ -111,6 +111,3 @@ async def on_member_update(before, after):
         return
 
     log_kanali = guild.get_channel(int(log_kanal_id))
-
-
-Şu kodda sunucu kurma komutundaki kanalların isminin başında emojiler varya o emojiler bu şekilde şeyin içinde olsun 「🗨」
