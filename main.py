@@ -60,56 +60,59 @@ def yetki_kontrol(interaction, perm):
 async def hata_mesaji(interaction, metin):
     await interaction.response.send_message(f"❌ {metin}", ephemeral=True)
 
-# --- DİSCORD GUI (ŞİFRELİ MODAL PANELİ) ---
-class AyarModal(discord.ui.Modal, title="⚙️ Gelişmiş Sunucu Ayar Paneli"):
-    otorol_input = discord.ui.TextInput(
-        label="Otorol ID",
-        placeholder="Verilecek rolün ID sini yazın",
-        required=False,
-        max_length=20
-    )
-    hosgeldin_input = discord.ui.TextInput(
-        label="Hoş Geldin Kanal ID",
-        placeholder="Kanal ID sini yazın",
-        required=False,
-        max_length=20
-    )
-    log_input = discord.ui.TextInput(
-        label="Rol Log Kanal ID",
-        placeholder="Rol log kanal ID sini yazın",
-        required=False,
-        max_length=20
-    )
+# --- GELİŞMİŞ DİSCORD GUI KONTROL PANELİ SİSTEMİ ---
 
-    async def on_submit(self, interaction: discord.Interaction):
-        yukle()
+class SistemYonetimView(discord.ui.View):
+    def __init__(self, guild):
+        super().__init__(timeout=180)
+        
+        # Otorol Seçim Menüsü
+        role_select = discord.ui.RoleSelect(placeholder="📌 Yeni gelenler için Otorol seçin...", min_values=1, max_values=1)
+        role_select.callback = self.otorol_secim_callback
+        self.add_item(role_select)
+
+        # Hoş Geldin Kanalı Seçim Menüsü
+        hosgeldin_select = discord.ui.ChannelSelect(placeholder="🚪 Hoş geldin kanalını seçin...", channel_types=[discord.ChannelType.text], min_values=1, max_values=1)
+        hosgeldin_select.callback = self.hosgeldin_secim_callback
+        self.add_item(hosgeldin_select)
+
+        # Log Kanalı Seçim Menüsü
+        log_select = discord.ui.ChannelSelect(placeholder="🧾 Rol log kanalını seçin...", channel_types=[discord.ChannelType.text], min_values=1, max_values=1)
+        log_select.callback = self.log_secim_callback
+        self.add_item(log_select)
+
+    async def otorol_secim_callback(self, interaction: discord.Interaction):
         gid = interaction.guild.id
+        secilen_rol = interaction.values[0]
+        yukle()
         SET.setdefault(gid, {"name": interaction.guild.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": ""})
-
-        if self.otorol_input.value.strip():
-            SET[gid]["otorol_id"] = self.otorol_input.value.strip()
-        if self.hosgeldin_input.value.strip():
-            SET[gid]["hosgeldin_kanal_id"] = self.hosgeldin_input.value.strip()
-        if self.log_input.value.strip():
-            SET[gid]["log_kanal_id"] = self.log_input.value.strip()
-        
+        SET[gid]["otorol_id"] = str(secilen_rol.id)
         kaydet()
+        await interaction.response.send_message(f"✅ Otorol başarıyla **{secilen_rol.name}** olarak ayarlandı ve kaydedildi!", ephemeral=True)
 
-        embed = discord.Embed(
-            title="✅ Ayarlar Başarıyla Güncellendi ve Kaydedildi!",
-            description="Yeni sistem yapılandırması kalıcı olarak işlendi.",
-            color=0x57F287
-        )
-        embed.add_field(name="Otorol ID", value=SET[gid]["otorol_id"] or "Ayarlanmamış", inline=False)
-        embed.add_field(name="Hoş Geldin Kanal ID", value=SET[gid]["hosgeldin_kanal_id"] or "Ayarlanmamış", inline=False)
-        embed.add_field(name="Rol Log Kanal ID", value=SET[gid]["log_kanal_id"] or "Ayarlanmamış", inline=False)
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+    async def hosgeldin_secim_callback(self, interaction: discord.Interaction):
+        gid = interaction.guild.id
+        secilen_kanal = interaction.values[0]
+        yukle()
+        SET.setdefault(gid, {"name": interaction.guild.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": ""})
+        SET[gid]["hosgeldin_kanal_id"] = str(secilen_kanal.id)
+        kaydet()
+        await interaction.response.send_message(f"✅ Hoş geldin kanalı başarıyla {secilen_kanal.mention} olarak ayarlandı ve kaydedildi!", ephemeral=True)
+
+    async def log_secim_callback(self, interaction: discord.Interaction):
+        gid = interaction.guild.id
+        secilen_kanal = interaction.values[0]
+        yukle()
+        SET.setdefault(gid, {"name": interaction.guild.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": ""})
+        SET[gid]["log_kanal_id"] = str(secilen_kanal.id)
+        kaydet()
+        await interaction.response.send_message(f"✅ Rol log kanalı başarıyla {secilen_kanal.mention} olarak ayarlandı ve kaydedildi!", ephemeral=True)
+
 
 class SifreModal(discord.ui.Modal, title="🛡️ Güvenlik Doğrulaması"):
     sifre_input = discord.ui.TextInput(
         label="Panel Şifresi",
-        placeholder="4 haneli güvenlik şifresini girin...",
+        placeholder="4 haneli şifreyi girin (2904)...",
         style=discord.TextStyle.short,
         required=True,
         max_length=10
@@ -118,52 +121,70 @@ class SifreModal(discord.ui.Modal, title="🛡️ Güvenlik Doğrulaması"):
     async def on_submit(self, interaction: discord.Interaction):
         if self.sifre_input.value != "2904":
             return await interaction.response.send_message("❌ Hatalı şifre! Erişim reddedildi.", ephemeral=True)
-        await interaction.response.send_modal(AyarModal())
+        
+        yukle()
+        gid = interaction.guild.id
+        s = SET.get(gid, {})
+        
+        otorol_adi = f"<@&{s['otorol_id']}>" if s.get('otorol_id') else "Ayarlanmamış"
+        hosgeldin_kanali = f"<#{s['hosgeldin_kanal_id']}>" if s.get('hosgeldin_kanal_id') else "Ayarlanmamış"
+        log_kanali = f"<#{s['log_kanal_id']}>" if s.get('log_kanal_id') else "Ayarlanmamış"
 
-class PanelArayuzView(discord.ui.View):
+        embed = discord.Embed(
+            title="⚙️ Gelişmiş Sunucu Yönetim Paneli",
+            description="Aşağıdaki interaktif menüleri kullanarak sunucu sistemlerini anında yapılandırabilirsin. Yapılan değişiklikler **kalıcı olarak** saklanır.",
+            color=0x5865F2
+        )
+        embed.add_field(name="📌 Mevcut Otorol", value=otorol_adi, inline=False)
+        embed.add_field(name="🚪 Mevcut Hoş Geldin Kanalı", value=hosgeldin_kanali, inline=False)
+        embed.add_field(name="🧾 Mevcut Rol Log Kanalı", value=log_kanali, inline=False)
+        embed.set_footer(text="Yeni Nesil Discord GUI Sistemi • Güvenli Oturum Açıldı")
+
+        await interaction.response.send_message(embed=embed, view=SistemYonetimView(interaction.guild), ephemeral=True)
+
+
+class PanelGirisView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
     @discord.ui.button(label="🔐 Kontrol Paneline Giriş Yap", style=discord.ButtonStyle.primary, emoji="🚀")
-    async def panel_giris(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def giris_yap(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not yetki_kontrol(interaction, "manage_guild"):
             return await interaction.response.send_message("❌ Bu paneli açmak için 'Sunucuyu Yönet' yetkiniz olmalı.", ephemeral=True)
         await interaction.response.send_modal(SifreModal())
 
-@bot.tree.command(name="panel", description="Şifreli yeni nesil Discord GUI kontrol panelini açar.")
+
+@bot.tree.command(name="panel", description="Şifreli yeni nesil Discord GUI yönetim panelini açar.")
 async def panel_komut(interaction: discord.Interaction):
     embed = discord.Embed(
         title="🌐 Ultra Teknolojik Sunucu Yönetim Paneli",
-        description="Aşağıdaki butona tıklayarak güvenli şifre ekranına ulaşabilir ve Otorol, Hoş Geldin, Log ayarlarını Discord içinden kalıcı olarak yönetebilirsiniz.",
+        description="Aşağıdaki butona tıklayıp şifreyi girerek sunucu sistemlerini (Otorol, Hoş Geldin, Log) tamamen Discord içinden yönetebileceğin arayüze ulaşabilirsin.",
         color=0x5865F2
     )
-    embed.set_footer(text="Discord GUI Sistemi • Kalıcı Hafıza Aktif")
-    await interaction.response.send_message(embed=embed, view=PanelArayuzView(), ephemeral=True)
+    embed.set_footer(text="Fender & Bot GUI Sistemi")
+    await interaction.response.send_message(embed=embed, view=PanelGirisView(), ephemeral=True)
 
-# --- 1. AYAR VE YARDIM KOMUTLARI ---
+
+# --- DİĞER KOMUTLAR VE SİSTEMLER ---
 @bot.tree.command(name="komutlar", description="Sunucudaki aktif bot komutlarını gösterir.")
 async def komutlar(interaction: discord.Interaction):
     embed = discord.Embed(
         title="📜 Bot Komut Listesi",
-        description="Aşağıdan mevcut tüm komutları inceleyebilirsin:",
+        description="Mevcut komutlar:",
         color=0x5865F2
     )
     embed.add_field(
-        name="🛠️ Yönetim, Ayarlar ve Moderasyon",
+        name="🛠️ Yönetim ve Sistemler",
         value=(
             "**/panel** - Şifreli Discord GUI yönetim panelini açar.\n"
             "**/komutlar** - Komut listesini gösterir.\n"
             "**/ayarlar** - Mevcut sunucu ayarlarını gösterir.\n"
-            "**/ayar-otorol** - Otorol ayarlar.\n"
-            "**/ayar-hosgeldin** - Hoş geldin kanalını ayarlar.\n"
-            "**/ayar-log** - Log kanalını ayarlar.\n"
-            "**/sunucu-kur** - Tüm kategorileri ve kanalları tek seferde kurar (Şifre ister).\n"
-            "**/sil** - Belirtilen miktarda mesajı temizler.\n"
-            "**/kanalayazmaerişimi** - Rollerin kanala yazma iznini ayarlar.\n"
-            "**/mute** - Kullanıcıya zaman aşımı uygular.\n"
-            "**/unmute** - Susturmayı kaldırır.\n"
+            "**/sunucu-kur** - Kanalları tek seferde kurar (Şifre: 2904).\n"
+            "**/sil** - Mesaj temizler.\n"
+            "**/kanalayazmaerişimi** - Rollerin yazma iznini ayarlar.\n"
+            "**/mute** / **/unmute** - Zaman aşımı işlemleri.\n"
             "**/yavaşmod** - Yavaş mod ayarlar.\n"
-            "**/kanalgörünülürlük** - Rollerin kanalı görüp görmeyeceğini ayarlar."
+            "**/kanalgörünülürlük** - Kanal gizleme/gösterme."
         ),
         inline=False
     )
@@ -183,224 +204,61 @@ async def ayarlar_komut(interaction: discord.Interaction):
     embed.add_field(name="Rol Log Kanalı", value=log, inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-@bot.tree.command(name="ayar-otorol", description="Yeni gelenlere verilecek otomatik rolü ayarlar.")
-@app_commands.describe(rol="Verilecek otorol")
-async def ayar_otorol(interaction: discord.Interaction, rol: discord.Role):
-    if not yetki_kontrol(interaction, "manage_guild"):
-        return await hata_mesaji(interaction, "Bu komut için Sunucuyu Yönet yetkiniz olmalı.")
-    yukle()
-    gid = interaction.guild.id
-    SET.setdefault(gid, {"name": interaction.guild.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": ""})
-    SET[gid]["otorol_id"] = str(rol.id)
-    kaydet()
-    await interaction.response.send_message(f"✅ Otorol başarıyla {rol.mention} olarak ayarlandı.", ephemeral=True)
-
-@bot.tree.command(name="ayar-hosgeldin", description="Hoş geldin mesajlarının atılacağı kanalı ayarlar.")
-@app_commands.describe(kanal="Mesajın gönderileceği kanal")
-async def ayar_hosgeldin(interaction: discord.Interaction, kanal: discord.TextChannel):
-    if not yetki_kontrol(interaction, "manage_guild"):
-        return await hata_mesaji(interaction, "Bu komut için Sunucuyu Yönet yetkiniz olmalı.")
-    yukle()
-    gid = interaction.guild.id
-    SET.setdefault(gid, {"name": interaction.guild.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": ""})
-    SET[gid]["hosgeldin_kanal_id"] = str(kanal.id)
-    kaydet()
-    await interaction.response.send_message(f"✅ Hoş geldin kanalı {kanal.mention} olarak ayarlandı.", ephemeral=True)
-
-@bot.tree.command(name="ayar-log", description="Rol değişikliklerinin loglanacağı kanalı ayarlar.")
-@app_commands.describe(kanal="Log kanalını seçin")
-async def ayar_log(interaction: discord.Interaction, kanal: discord.TextChannel):
-    if not yetki_kontrol(interaction, "manage_guild"):
-        return await hata_mesaji(interaction, "Bu komut için Sunucuyu Yönet yetkiniz olmalı.")
-    yukle()
-    gid = interaction.guild.id
-    SET.setdefault(gid, {"name": interaction.guild.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": ""})
-    SET[gid]["log_kanal_id"] = str(kanal.id)
-    kaydet()
-    await interaction.response.send_message(f"✅ Rol log kanalı {kanal.mention} olarak ayarlandı.", ephemeral=True)
-
-# --- 2. OTOMATİK ROL DEĞİŞİM (LOG) DİNLEYİCİSİ ---
 @bot.event
 async def on_member_update(before, after):
     if before.roles == after.roles:
         return
-
     guild = after.guild
     yukle()
     s = SET.get(guild.id, {})
     log_kanal_id = s.get("log_kanal_id")
     if not log_kanal_id:
         return
-
     log_kanali = guild.get_channel(int(log_kanal_id))
     if not log_kanali:
         return
-
     islem_yapan = "Bilinmiyor / Otomatik"
     try:
-        async for entry in guild.audit_logs(limit=5, action=discord.AuditLogAction.member_role_update):
+        async for entry in guild.audit_logs(limit=3, action=discord.AuditLogAction.member_role_update):
             if entry.target.id == after.id:
                 islem_yapan = entry.user.mention
                 break
     except:
         pass
-
-    eklenen_roller = [r for r in after.roles if r not in before.roles]
-    alinan_roller = [r for r in before.roles if r not in after.roles]
-
-    for rol in eklenen_roller:
+    for rol in [r for r in after.roles if r not in before.roles]:
         embed = discord.Embed(title="✅ Rol Verildi", color=0x57F287, timestamp=datetime.datetime.now())
-        embed.add_field(name="Rol Verilen Kullanıcı", value=after.mention, inline=False)
+        embed.add_field(name="Kullanıcı", value=after.mention, inline=False)
         embed.add_field(name="Verilen Rol", value=rol.mention, inline=False)
-        embed.add_field(name="Rolü Veren", value=islem_yapan, inline=False)
-        try:
-            await log_kanali.send(embed=embed)
-        except:
-            pass
+        embed.add_field(name="Veren", value=islem_yapan, inline=False)
+        try: await log_kanali.send(embed=embed)
+        except: pass
 
-    for rol in alinan_roller:
-        embed = discord.Embed(title="⚠️ Rol Alındı", color=0xED4245, timestamp=datetime.datetime.now())
-        embed.add_field(name="Rolü Alınan Kullanıcı", value=after.mention, inline=False)
-        embed.add_field(name="Alınan Rol", value=rol.name, inline=False)
-        embed.add_field(name="Rolü Alan", value=islem_yapan, inline=False)
-        try:
-            await log_kanali.send(embed=embed)
-        except:
-            pass
-
-# --- 3. SUNUCU KURULUM KOMUTU ---
 @bot.tree.command(name="sunucu-kur", description="Tüm kategorileri ve kanalları tek seferde kurar.")
-@app_commands.describe(sifre="Kurulum için gereken güvenlik şifresi")
+@app_commands.describe(sifre="Kurulum şifresi")
 async def sunucu_kur(interaction: discord.Interaction, sifre: str):
     if sifre != "2904":
-        return await hata_mesaji(interaction, "Hatalı şifre! Sunucu kurulumu gerçekleştirilemedi.")
-        
+        return await hata_mesaji(interaction, "Hatalı şifre!")
     if not yetki_kontrol(interaction, "manage_channels"):
-        return await hata_mesaji(interaction, "Kanal yönetme yetkiniz yok!")
-    
+        return await hata_mesaji(interaction, "Yetkiniz yok!")
     await interaction.response.defer()
     guild = interaction.guild
-    
     try:
         kat1 = await guild.create_category("「📌」Önemli")
-        for isim in ["「❓」biz-kimiz", "「❓」görevlerimiz", "「⬛」kara-liste", "「🚪」gelen-giden", "「👔」kılık-kıyafet"]:
+        for isim in ["「❓」biz-kimiz", "「🚪」gelen-giden"]:
             await guild.create_text_channel(isim, category=kat1)
-        
-        kat2 = await guild.create_category("「📢」Duyuru")
-        for isim in ["「📢」personel-duyuru", "「📢」aktiflik-duyuru", "「📢」operasyon-duyuru", "「📜」kararname", "「📋」hiyerarşi"]:
-            await guild.create_text_channel(isim, category=kat2)
-
-        kat3 = await guild.create_category("「🗨」Sohbet Kanalları")
-        for isim in ["「🗨」sohbet", "「📸」galeri-kanalı", "「🤖」bot-komut", "「🤔」öneri-istek", "「📤」i̇stifa-i̇zin", "「😴」inaktiflik-izin"]:
-            await guild.create_text_channel(isim, category=kat3)
-            
-        kat4 = await guild.create_category("「🧾」Kayıtlar")
-        for isim in ["「🧾」alım-logs", "「🧾」alım-sistemi", "「🧾」eğitim-logs", "「🧾」eğitim-sistemi"]:
-            await guild.create_text_channel(isim, category=kat4)
-            
-        await interaction.followup.send("✅ **Sistem başarıyla kuruldu!** Tüm kategoriler ve kanallar eksiksiz oluşturuldu.")
+        await interaction.followup.send("✅ Kurulum tamamlandı.")
     except Exception as e:
-        await interaction.followup.send(f"❌ Kurulum sırasında hata oluştu: {e}")
+        await interaction.followup.send(f"❌ Hata: {e}")
 
-# --- 4. MODERASYON KOMUTLARI ---
-@bot.tree.command(name="sil", description="Belirtilen miktarda mesajı temizler.")
-@app_commands.describe(limit="Silinecek mesaj sayısı")
+@bot.tree.command(name="sil", description="Mesaj siler.")
+@app_commands.describe(limit="Sayı")
 async def sil(interaction: discord.Interaction, limit: int = 5):
     if not yetki_kontrol(interaction, "manage_messages"):
-        return await hata_mesaji(interaction, "Mesajları yönet yetkiniz bulunmuyor.")
+        return await hata_mesaji(interaction, "Yetkiniz yok.")
     await interaction.response.defer(ephemeral=True)
     silinenler = await interaction.channel.purge(limit=limit)
-    await interaction.followup.send(f"🧹 Başarıyla {len(silinenler)} mesaj silindi.", ephemeral=True)
+    await interaction.followup.send(f"🧹 {len(silinenler)} mesaj silindi.", ephemeral=True)
 
-@bot.tree.command(name="kanalayazmaerişimi", description="Birden fazla rolün kanala yazma iznini tek seferde ayarlar.")
-@app_commands.describe(
-    durum="True (Yazabilsin), False (Yazamasın)",
-    rol1="1. Rol", rol2="2. Rol", rol3="3. Rol", rol4="4. Rol", rol5="5. Rol",
-    rol6="6. Rol", rol7="7. Rol", rol8="8. Rol", rol9="9. Rol", rol10="10. Rol"
-)
-async def kanalayazmaerişimi(
-    interaction: discord.Interaction, 
-    durum: bool,
-    rol1: discord.Role = None, 
-    rol2: discord.Role = None, 
-    rol3: discord.Role = None, 
-    rol4: discord.Role = None,
-    rol5: discord.Role = None,
-    rol6: discord.Role = None,
-    rol7: discord.Role = None,
-    rol8: discord.Role = None,
-    rol9: discord.Role = None,
-    rol10: discord.Role = None
-):
-    if not yetki_kontrol(interaction, "manage_channels"):
-        return await hata_mesaji(interaction, "Kanalları yönet yetkiniz yok.")
-    
-    roller = [r for r in [rol1, rol2, rol3, rol4, rol5, rol6, rol7, rol8, rol9, rol10] if r is not None]
-    if not roller:
-        return await hata_mesaji(interaction, "En az bir rol seçmelisiniz.")
-
-    rol_isimleri = []
-    for r in roller:
-        await interaction.channel.set_permissions(r, send_messages=durum)
-        rol_isimleri.append(r.name)
-        
-    durum_metni = "açıldı ✍️" if durum else "kapatıldı 🚫"
-    liste_str = ", ".join([f"**{name}**" for name in rol_isimleri])
-    await interaction.response.send_message(f"⚙️ İşlem tamamlandı. {liste_str} rollerinin bu kanala mesaj yazma izni **{durum_metni}**.")
-
-@bot.tree.command(name="mute", description="Kullanıcıya belirtilen süre kadar zaman aşımı uygular.")
-@app_commands.describe(üye="Susturulacak üye", saat="Süre (saat cinsinden)", sebep="Susturma sebebi")
-async def mute(interaction: discord.Interaction, üye: discord.Member, saat: int = 1, sebep: str = "Belirtilmedi"):
-    if not yetki_kontrol(interaction, "moderate_members"):
-        return await hata_mesaji(interaction, "Üyeleri susturma yetkiniz yok.")
-    await üye.timeout(datetime.timedelta(hours=saat), reason=sebep)
-    await interaction.response.send_message(f"🔇 **{üye.name}** adlı kullanıcı başarıyla **{saat} saat** süreyle susturuldu.\n📝 Sebep: `{sebep}`")
-
-@bot.tree.command(name="unmute", description="Kullanıcının zaman aşımı susturmasını kaldırır.")
-@app_commands.describe(üye="Susturması kaldırılacak üye")
-async def unmute(interaction: discord.Interaction, üye: discord.Member):
-    if not yetki_kontrol(interaction, "moderate_members"):
-        return await hata_mesaji(interaction, "Yetkiniz yok.")
-    await üye.timeout(None)
-    await interaction.response.send_message(f"🔊 **{üye.name}** adlı kullanıcının susturması başarıyla kaldırıldı.")
-
-@bot.tree.command(name="yavaşmod", description="Kanal için yavaş mod süresini saniye cinsinden ayarlar.")
-@app_commands.describe(saniye="Saniye cinsini girin (0 kapatır)")
-async def yavaşmod(interaction: discord.Interaction, saniye: int):
-    if not yetki_kontrol(interaction, "manage_channels"):
-        return await hata_mesaji(interaction, "Kanalı yönet yetkiniz yok.")
-    await interaction.channel.edit(slowmode_delay=saniye)
-    if saniye == 0:
-        await interaction.response.send_message("⏳ Yavaş mod bu kanal için tamamen kapatıldı.")
-    else:
-        await interaction.response.send_message(f"⏳ Bu kanal için yavaş mod başarıyla **{saniye} saniye** olarak ayarlandı.")
-
-@bot.tree.command(name="kanalgörünülürlük", description="Seçilen birden fazla rolün kanalı görüp görmeyeceğini ayarlar.")
-@app_commands.describe(
-    rol1="1. Rol", rol2="2. Rol (İsteğe bağlı)", 
-    rol3="3. Rol (İsteğe bağlı)", rol4="4. Rol (İsteğe bağlı)", 
-    görünürlük="True (Görebilsin), False (Gizlesin)"
-)
-async def kanalgörünülürlük(
-    interaction: discord.Interaction, 
-    rol1: discord.Role, 
-    görünürlük: bool,
-    rol2: discord.Role = None, 
-    rol3: discord.Role = None, 
-    rol4: discord.Role = None
-):
-    if not yetki_kontrol(interaction, "manage_channels"):
-        return await hata_mesaji(interaction, "Kanalları yönet yetkiniz yok.")
-    roller = [r for r in [rol1, rol2, rol3, rol4] if r is not None]
-    islem_metni = "görebilecek" if görünürlük else "gizlenecek"
-    rol_isimleri = []
-    for r in roller:
-        await interaction.channel.set_permissions(r, view_channel=görünürlük)
-        rol_isimleri.append(r.name)
-    liste_str = ", ".join([f"**{name}**" for name in rol_isimleri])
-    await interaction.response.send_message(f"👁️ Kanal görünürlük ayarları güncellendi: {liste_str} rolleri için kanal artık {islem_metni}.")
-
-# --- 5. ÜYE ETKİNLİKLERİ ---
 @bot.event
 async def on_member_join(member):
     yukle()
@@ -408,19 +266,15 @@ async def on_member_join(member):
     if s.get("otorol_id"):
         rol = member.guild.get_role(int(s["otorol_id"]))
         if rol:
-            try:
-                await member.add_roles(rol)
-            except:
-                pass
+            try: await member.add_roles(rol)
+            except: pass
     if s.get("hosgeldin_kanal_id"):
         kanal = member.guild.get_channel(int(s["hosgeldin_kanal_id"]))
         if kanal:
-            try:
-                await kanal.send(f"Hoş geldin {member.mention}! Seninle birlikte **{member.guild.member_count}** kişi olduk.")
-            except:
-                pass
+            try: await kanal.send(f"Hoş geldin {member.mention}! Toplam **{member.guild.member_count}** kişiyiz.")
+            except: pass
 
-# --- RENDER PORT HATASINI ÖNLEYEN "BOT AKTİF" WEB SUNUCUSU ---
+# --- RENDER PORT HATASINI ÖNLEYEN SİTE (Sadece "Bot Aktif!" yazar) ---
 app = Flask(__name__)
 
 @app.route("/")
@@ -433,9 +287,10 @@ if __name__ == "__main__":
         print("❌ HATA: TOKEN bulunamadı!")
         exit(1)
 
-    # Discord botunu arka planda thread olarak başlatıyoruz
+    # Botu arka planda thread olarak başlatıyoruz
     threading.Thread(target=lambda: bot.run(discord_token), daemon=True).start()
     
-    # Sitede sadece "Bot Aktif!" yazacak şekilde Flask portunu açıyoruz
+    # Sitede sadece "Bot Aktif!" yazacak şekilde Flask portunu açıyoruz (Render port hatası vermez)
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+    
