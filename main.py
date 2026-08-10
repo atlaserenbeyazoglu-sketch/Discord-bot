@@ -63,11 +63,16 @@ async def hata_mesaji(interaction, metin):
     else:
         await interaction.response.send_message(f"❌ {metin}", ephemeral=True)
 
-# --- GUI KONTROL PANELİ VE DOĞRU SINIF KULLANIMI ---
+# --- GUI KONTROL PANELİ VE GEÇİCİ HAFIZA + KAYDET BUTONU ---
 class SistemYonetimView(discord.ui.View):
-    def __init__(self):
+    def __init__(self, guild_id):
         super().__init__(timeout=180)
-        
+        self.guild_id = guild_id
+        # Seçilen geçici ID'leri burada tutuyoruz
+        self.secilen_otorol = None
+        self.secilen_hg_kanal = None
+        self.secilen_log_kanal = None
+
         # Otorol Seçim Menüsü
         role_select = discord.ui.RoleSelect(placeholder="📌 Yeni gelenler için Otorol seçin...", min_values=1, max_values=1)
         role_select.callback = self.otorol_secim_callback
@@ -85,45 +90,59 @@ class SistemYonetimView(discord.ui.View):
 
     async def otorol_secim_callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-        try:
-            gid = interaction.guild.id
-            secilen_rol = interaction.data["values"][0]
-            role_obj = interaction.guild.get_role(int(secilen_rol))
-            yukle()
-            SET.setdefault(gid, {"name": interaction.guild.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": ""})
-            SET[gid]["otorol_id"] = str(role_obj.id)
-            kaydet()
-            await interaction.followup.send(f"✅ Otorol başarıyla **{role_obj.name}** olarak ayarlandı ve kaydedildi!", ephemeral=True)
-        except Exception as e:
-            await interaction.followup.send(f"❌ Hata oluştu: {e}", ephemeral=True)
+        self.secilen_otorol = interaction.data["values"][0]
+        role_obj = interaction.guild.get_role(int(self.secilen_otorol))
+        await interaction.followup.send(f"📌 Otorol geçici olarak seçildi: **{role_obj.name}** (Kaydetmek için alttaki **Kaydet** butonuna basın)", ephemeral=True)
 
     async def hosgeldin_secim_callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-        try:
-            gid = interaction.guild.id
-            secilen_id = interaction.data["values"][0]
-            kanal_obj = interaction.guild.get_channel(int(secilen_id))
-            yukle()
-            SET.setdefault(gid, {"name": interaction.guild.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": ""})
-            SET[gid]["hosgeldin_kanal_id"] = str(kanal_obj.id)
-            kaydet()
-            await interaction.followup.send(f"✅ Hoş geldin kanalı başarıyla {kanal_obj.mention} olarak ayarlandı ve kaydedildi!", ephemeral=True)
-        except Exception as e:
-            await interaction.followup.send(f"❌ Hata oluştu: {e}", ephemeral=True)
+        self.secilen_hg_kanal = interaction.data["values"][0]
+        kanal_obj = interaction.guild.get_channel(int(self.secilen_hg_kanal))
+        await interaction.followup.send(f"🚪 Hoş geldin kanalı geçici olarak seçildi: {kanal_obj.mention} (Kaydetmek için alttaki **Kaydet** butonuna basın)", ephemeral=True)
 
     async def log_secim_callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-        try:
-            gid = interaction.guild.id
-            secilen_id = interaction.data["values"][0]
-            kanal_obj = interaction.guild.get_channel(int(secilen_id))
-            yukle()
-            SET.setdefault(gid, {"name": interaction.guild.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": ""})
-            SET[gid]["log_kanal_id"] = str(kanal_obj.id)
-            kaydet()
-            await interaction.followup.send(f"✅ Rol log kanalı başarıyla {kanal_obj.mention} olarak ayarlandı ve kaydedildi!", ephemeral=True)
-        except Exception as e:
-            await interaction.followup.send(f"❌ Hata oluştu: {e}", ephemeral=True)
+        self.secilen_log_kanal = interaction.data["values"][0]
+        kanal_obj = interaction.guild.get_channel(int(self.secilen_log_kanal))
+        await interaction.followup.send(f"🧾 Log kanalı geçici olarak seçildi: {kanal_obj.mention} (Kaydetmek için alttaki **Kaydet** butonuna basın)", ephemeral=True)
+
+    @discord.ui.button(label="💾 Ayarları Kalıcı Olarak Kaydet", style=discord.ButtonStyle.success, emoji="✅", row=3)
+    async def kaydet_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        yukle()
+        SET.setdefault(self.guild_id, {"name": interaction.guild.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": ""})
+
+        degisiklik_var = False
+        if self.secilen_otorol is not None:
+            SET[self.guild_id]["otorol_id"] = str(self.secilen_otorol)
+            degisiklik_var = True
+        if self.secilen_hg_kanal is not None:
+            SET[self.guild_id]["hosgeldin_kanal_id"] = str(self.secilen_hg_kanal)
+            degisiklik_var = True
+        if self.secilen_log_kanal is not None:
+            SET[self.guild_id]["log_kanal_id"] = str(self.secilen_log_kanal)
+            degisiklik_var = True
+
+        if not degisiklik_var:
+            return await interaction.followup.send("⚠️ Henüz hiçbir rol veya kanal seçmediniz!", ephemeral=True)
+
+        kaydet()
+
+        s = SET[self.guild_id]
+        otorol_adi = f"<@&{s['otorol_id']}>" if s.get('otorol_id') else "Ayarlanmamış"
+        hosgeldin_kanali = f"<#{s['hosgeldin_kanal_id']}>" if s.get('hosgeldin_kanal_id') else "Ayarlanmamış"
+        log_kanali = f"<#{s['log_kanal_id']}>" if s.get('log_kanal_id') else "Ayarlanmamış"
+
+        embed = discord.Embed(
+            title="✅ Ayarlar Başarıyla Kaydedildi!",
+            description="Seçtiğiniz tüm sistemler kalıcı hafızaya işlendi.",
+            color=0x57F287
+        )
+        embed.add_field(name="📌 Otorol", value=otorol_adi, inline=False)
+        embed.add_field(name="🚪 Hoş Geldin Kanalı", value=hosgeldin_kanali, inline=False)
+        embed.add_field(name="🧾 Rol Log Kanalı", value=log_kanali, inline=False)
+
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
 
 # --- ÖZEL KONTROL PANELİ KOMUTU (Şifre Parametreli) ---
@@ -146,15 +165,15 @@ async def ozel_kontrol_paneli(interaction: discord.Interaction, sifre: str):
 
     embed = discord.Embed(
         title="⚙️ Gelişmiş Sunucu Yönetim Paneli",
-        description="Aşağıdaki interaktif menüleri kullanarak sistemleri yapılandırabilirsin. Seçtiğin her şey **kalıcı olarak** kaydedilir.",
+        description="Aşağıdaki menülerden seçimlerinizi yapın ve ardından **'💾 Ayarları Kalıcı Olarak Kaydet'** butonuna basarak sisteme işleyin.",
         color=0x5865F2
     )
     embed.add_field(name="📌 Mevcut Otorol", value=otorol_adi, inline=False)
     embed.add_field(name="🚪 Mevcut Hoş Geldin Kanalı", value=hosgeldin_kanali, inline=False)
     embed.add_field(name="🧾 Mevcut Rol Log Kanalı", value=log_kanali, inline=False)
-    embed.set_footer(text="Discord GUI Sistemi • Kalıcı Hafıza Aktif")
+    embed.set_footer(text="Discord GUI Sistemi • Kaydet Butonlu Sürüm")
 
-    await interaction.response.send_message(embed=embed, view=SistemYonetimView(), ephemeral=True)
+    await interaction.response.send_message(embed=embed, view=SistemYonetimView(gid), ephemeral=True)
 
 
 # --- DİĞER TEMEL SİSTEMLER VE KOMUTLAR ---
@@ -227,6 +246,11 @@ async def on_member_update(before, after):
 
 @bot.tree.command(name="sunucu-kur", description="Tüm kategorileri ve kanalları tek seferde kurar.")
 @app_commands.describe(sifre="Kurulum şifresi")
+async def sunucu-kur(interaction: discord.Interaction, sifre: str):
+    pass # Yer tutucu, alttakini kullanıyoruz
+
+@bot.tree.command(name="sunucu-kur", description="Tüm kategorileri ve kanalları tek seferde kurar.")
+@app_commands.describe(sifre="Kurulum şifresi")
 async def sunucu_kur(interaction: discord.Interaction, sifre: str):
     if sifre != "2904":
         return await hata_mesaji(interaction, "Hatalı şifre!")
@@ -283,4 +307,4 @@ if __name__ == "__main__":
     
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-                              
+    
