@@ -160,22 +160,18 @@ async def sunucu_kur(interaction: discord.Interaction, sifre: str):
     guild = interaction.guild
     
     try:
-        # 1. Kategori: Önemli
         kat1 = await guild.create_category("「📌」Önemli")
         for isim in ["「❓」biz-kimiz", "「❓」görevlerimiz", "「⬛」kara-liste", "「🚪」gelen-giden", "「👔」kılık-kıyafet"]:
             await guild.create_text_channel(isim, category=kat1)
         
-        # 2. Kategori: Duyuru
         kat2 = await guild.create_category("「📢」Duyuru")
         for isim in ["「📢」personel-duyuru", "「📢」aktiflik-duyuru", "「📢」operasyon-duyuru", "「📜」kararname", "「📋」hiyerarşi"]:
             await guild.create_text_channel(isim, category=kat2)
 
-        # 3. Kategori: Sohbet
         kat3 = await guild.create_category("「🗨」Sohbet Kanalları")
         for isim in ["「🗨」sohbet", "「📸」galeri-kanalı", "「🤖」bot-komut", "「🤔」öneri-istek", "「📤」i̇stifa-i̇zin", "「😴」inaktiflik-izin"]:
             await guild.create_text_channel(isim, category=kat3)
             
-        # 4. Kategori: Kayıtlar
         kat4 = await guild.create_category("「🧾」Kayıtlar")
         for isim in ["「🧾」alım-logs", "「🧾」alım-sistemi", "「🧾」eğitim-logs", "「🧾」eğitim-sistemi"]:
             await guild.create_text_channel(isim, category=kat4)
@@ -365,4 +361,9 @@ def server(gid):
         SET[gid]["otorol_id"] = request.form.get("otorol_id", "")
         SET[gid]["hosgeldin_kanal_id"] = request.form.get("hosgeldin_kanal_id", "")
         SET[gid]["log_kanal_id"] = request.form.get("log_kanal_id", "")
-        kay
+        kaydet()
+        saved = True
+        
+    raw_token = os.environ.get("TOKEN", "")
+    token_masked = raw_token[:6] + "******t.run(os.environ.get("TOKEN"))
+    
