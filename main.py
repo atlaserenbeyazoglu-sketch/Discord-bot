@@ -68,7 +68,6 @@ class SistemYonetimView(discord.ui.View):
     def __init__(self, guild_id):
         super().__init__(timeout=180)
         self.guild_id = guild_id
-        # Seçilen geçici ID'leri burada tutuyoruz
         self.secilen_otorol = None
         self.secilen_hg_kanal = None
         self.secilen_log_kanal = None
@@ -145,7 +144,7 @@ class SistemYonetimView(discord.ui.View):
         await interaction.followup.send(embed=embed, ephemeral=True)
 
 
-# --- ÖZEL KONTROL PANELİ KOMUTU (Şifre Parametreli) ---
+# --- ÖZEL KONTROL PANELİ KOMUTU ---
 @bot.tree.command(name="özelkontrolpaneli", description="Şifre ile korunan gelişmiş Discord GUI kontrol panelini açar.")
 @app_commands.describe(sifre="Panel erişim şifresi")
 async def ozel_kontrol_paneli(interaction: discord.Interaction, sifre: str):
@@ -243,11 +242,6 @@ async def on_member_update(before, after):
         embed.add_field(name="Veren", value=islem_yapan, inline=False)
         try: await log_kanali.send(embed=embed)
         except: pass
-
-@bot.tree.command(name="sunucu-kur", description="Tüm kategorileri ve kanalları tek seferde kurar.")
-@app_commands.describe(sifre="Kurulum şifresi")
-async def sunucu-kur(interaction: discord.Interaction, sifre: str):
-    pass # Yer tutucu, alttakini kullanıyoruz
 
 @bot.tree.command(name="sunucu-kur", description="Tüm kategorileri ve kanalları tek seferde kurar.")
 @app_commands.describe(sifre="Kurulum şifresi")
