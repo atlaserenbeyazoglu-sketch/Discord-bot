@@ -58,7 +58,10 @@ def yetki_kontrol(interaction, perm):
     return getattr(interaction.user.guild_permissions, perm, False)
 
 async def hata_mesaji(interaction, metin):
-    await interaction.response.send_message(f"❌ {metin}", ephemeral=True)
+    if interaction.response.is_done():
+        await interaction.followup.send(f"❌ {metin}", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"❌ {metin}", ephemeral=True)
 
 # --- GELİŞMİŞ DİSCORD GUI KONTROL PANELİ VE MENÜLERİ ---
 class SistemYonetimView(discord.ui.View):
@@ -81,74 +84,65 @@ class SistemYonetimView(discord.ui.View):
         self.add_item(log_select)
 
     async def otorol_secim_callback(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         gid = interaction.guild.id
         secilen_rol = interaction.values[0]
         yukle()
         SET.setdefault(gid, {"name": interaction.guild.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": ""})
         SET[gid]["otorol_id"] = str(secilen_rol.id)
         kaydet()
-        await interaction.response.send_message(f"✅ Otorol başarıyla **{secilen_rol.name}** olarak ayarlandı ve kaydedildi!", ephemeral=True)
+        await interaction.followup.send(f"✅ Otorol başarıyla **{secilen_rol.name}** olarak ayarlandı ve kaydedildi!", ephemeral=True)
 
     async def hosgeldin_secim_callback(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         gid = interaction.guild.id
         secilen_kanal = interaction.values[0]
         yukle()
         SET.setdefault(gid, {"name": interaction.guild.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": ""})
         SET[gid]["hosgeldin_kanal_id"] = str(secilen_kanal.id)
         kaydet()
-        await interaction.response.send_message(f"✅ Hoş geldin kanalı başarıyla {secilen_kanal.mention} olarak ayarlandı ve kaydedildi!", ephemeral=True)
+        await interaction.followup.send(f"✅ Hoş geldin kanalı başarıyla {secilen_kanal.mention} olarak ayarlandı ve kaydedildi!", ephemeral=True)
 
     async def log_secim_callback(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         gid = interaction.guild.id
         secilen_kanal = interaction.values[0]
         yukle()
         SET.setdefault(gid, {"name": interaction.guild.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": ""})
         SET[gid]["log_kanal_id"] = str(secilen_kanal.id)
         kaydet()
-        await interaction.response.send_message(f"✅ Rol log kanalı başarıyla {secilen_kanal.mention} olarak ayarlandı ve kaydedildi!", ephemeral=True)
+        await interaction.followup.send(f"✅ Rol log kanalı başarıyla {secilen_kanal.mention} olarak ayarlandı ve kaydedildi!", ephemeral=True)
 
 
-# --- ŞİFRE DOĞRULAMA MODALI ---
-class SifreModal(discord.ui.Modal, title="🛡️ Güvenlik Doğrulaması"):
-    sifre_input = discord.ui.TextInput(
-        label="Panel Şifresi",
-        placeholder="Şifreyi girin...",
-        style=discord.TextStyle.short,
-        required=True,
-        max_length=10
-    )
-
-    async def on_submit(self, interaction: discord.Interaction):
-        if self.sifre_input.value != "2904":
-            return await interaction.response.send_message("❌ Hatalı şifre! Erişim reddedildi.", ephemeral=True)
-        
-        yukle()
-        gid = interaction.guild.id
-        s = SET.get(gid, {})
-        
-        otorol_adi = f"<@&{s['otorol_id']}>" if s.get('otorol_id') else "Ayarlanmamış"
-        hosgeldin_kanali = f"<#{s['hosgeldin_kanal_id']}>" if s.get('hosgeldin_kanal_id') else "Ayarlanmamış"
-        log_kanali = f"<#{s['log_kanal_id']}>" if s.get('log_kanal_id') else "Ayarlanmamış"
-
-        embed = discord.Embed(
-            title="⚙️ Gelişmiş Sunucu Yönetim Paneli",
-            description="Aşağıdaki interaktif menüleri kullanarak sistemleri yapılandırabilirsin. Seçtiğin her şey **kalıcı olarak** kaydedilir.",
-            color=0x5865F2
-        )
-        embed.add_field(name="📌 Mevcut Otorol", value=otorol_adi, inline=False)
-        embed.add_field(name="🚪 Mevcut Hoş Geldin Kanalı", value=hosgeldin_kanali, inline=False)
-        embed.add_field(name="🧾 Mevcut Rol Log Kanalı", value=log_kanali, inline=False)
-        embed.set_footer(text="Discord GUI Sistemi • Kalıcı Hafıza Aktif")
-
-        await interaction.response.send_message(embed=embed, view=SistemYonetimView(), ephemeral=True)
-
-
-# --- ÖZEL KONTROL PANELİ KOMUTU ---
+# --- ÖZEL KONTROL PANELİ KOMUTU (Zorunlu Şifre Parametreli) ---
 @bot.tree.command(name="özelkontrolpaneli", description="Şifre ile korunan gelişmiş Discord GUI kontrol panelini açar.")
-async def ozel_kontrol_paneli(interaction: discord.Interaction):
+@app_commands.describe(sifre="Panel erişim şifresi")
+async def ozel_kontrol_paneli(interaction: discord.Interaction, sifre: str):
     if not yetki_kontrol(interaction, "manage_guild"):
         return await hata_mesaji(interaction, "Bu paneli açmak için 'Sunucuyu Yönet' yetkiniz olmalı.")
-    await interaction.response.send_modal(SifreModal())
+    
+    if sifre != "2904":
+        return await hata_mesaji(interaction, "Hatalı şifre! Erişim reddedildi.")
+    
+    yukle()
+    gid = interaction.guild.id
+    s = SET.get(gid, {})
+    
+    otorol_adi = f"<@&{s['otorol_id']}>" if s.get('otorol_id') else "Ayarlanmamış"
+    hosgeldin_kanali = f"<#{s['hosgeldin_kanal_id']}>" if s.get('hosgeldin_kanal_id') else "Ayarlanmamış"
+    log_kanali = f"<#{s['log_kanal_id']}>" if s.get('log_kanal_id') else "Ayarlanmamış"
+
+    embed = discord.Embed(
+        title="⚙️ Gelişmiş Sunucu Yönetim Paneli",
+        description="Aşağıdaki interaktif menüleri kullanarak sistemleri yapılandırabilirsin. Seçtiğin her şey **kalıcı olarak** kaydedilir.",
+        color=0x5865F2
+    )
+    embed.add_field(name="📌 Mevcut Otorol", value=otorol_adi, inline=False)
+    embed.add_field(name="🚪 Mevcut Hoş Geldin Kanalı", value=hosgeldin_kanali, inline=False)
+    embed.add_field(name="🧾 Mevcut Rol Log Kanalı", value=log_kanali, inline=False)
+    embed.set_footer(text="Discord GUI Sistemi • Kalıcı Hafıza Aktif")
+
+    await interaction.response.send_message(embed=embed, view=SistemYonetimView(), ephemeral=True)
 
 
 # --- DİĞER TEMEL SİSTEMLER VE KOMUTLAR ---
