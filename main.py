@@ -1,4 +1,4 @@
-import discord, json, os, datetime, threading, time, urllib.request
+import discord, json, os, datetime, threading
 from discord.ext import commands
 from discord import app_commands
 from flask import Flask
@@ -336,25 +336,12 @@ async def on_member_join(member):
             try: await kanal.send(f"Hoş geldin {member.mention}! Toplam **{member.guild.member_count}** kişiyiz.")
             except: pass
 
-# --- KUSURSUZ UYKU ÖNLEYİCİ ULTRA TEKNOLOJİK SİSTEM (KEEP-ALIVE) ---
+# --- RENDER PORT HATASINI ÖNLEYEN BASİT SİTE ---
 app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Bot Ultra Aktif ve Çalışıyor!"
-
-def otomatik_ping_at():
-    # Render linkini ortam değişkeninden veya otomatik algılayarak kendi kendine ping atar
-    time.sleep(10)
-    render_url = os.environ.get("RENDER_EXTERNAL_URL")
-    while True:
-        try:
-            if render_url:
-                urllib.request.urlopen(render_url)
-        except:
-            pass
-        # Her 3 dakikada bir (180 saniye) kendini tetikler, asla uyutmaz
-        time.sleep(180)
+    return "Bot Aktif!"
 
 if __name__ == "__main__":
     discord_token = os.environ.get("TOKEN")
@@ -362,13 +349,8 @@ if __name__ == "__main__":
         print("❌ HATA: TOKEN bulunamadı!")
         exit(1)
 
-    # Botu arka planda çalıştır
     threading.Thread(target=lambda: bot.run(discord_token), daemon=True).start()
     
-    # Kendi kendini uyandıran ultra sistem thread'i
-    threading.Thread(target=otomatik_ping_at, daemon=True).start()
-    
-    # Web sunucusunu başlat
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-    
+        
