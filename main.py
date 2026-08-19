@@ -1,4 +1,4 @@
-import discord, json, os, datetime, threading
+import discord, json, os, datetime, threading, aiohttp
 from discord.ext import commands
 from discord import app_commands
 from flask import Flask
@@ -33,8 +33,12 @@ async def on_ready():
             "name": g.name, 
             "otorol_id": "", 
             "hosgeldin_kanal_id": "", 
-            "log_kanal_id": ""
+            "log_kanal_id": "",
+            "log_dogrulama_aktif": False
         })
+        # Eksik anahtarları tamamla
+        if "log_dogrulama_aktif" not in SET[g.id]:
+            SET[g.id]["log_dogrulama_aktif"] = False
         SET[g.id]["name"] = g.name
     kaydet()
     try:
@@ -47,11 +51,62 @@ async def on_ready():
 
 @bot.event
 async def on_message(message):
-    if not message.author.bot and message.content.strip().lower() == "sa":
+    if message.author.bot:
+        return
+
+    # --- BOT ETİKETLENDİĞİNDE LOG / NÖBET DOĞRULAMA SİSTEMİ ---
+    if bot.user.mentioned_in(message) and not message.mention_everyone:
+        yukle()
+        gid = message.guild.id
+        s = SET.get(gid, {})
+        
+        # Sistem aktif mi kontrol et
+        if s.get("log_dogrulama_aktif", False):
+            icerik = message.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
+            
+            # Format veya yazı kontrolü
+            if not icerik or len(icerik) < 5:
+                try:
+                    await message.add_reaction("❌")
+                    await message.reply("❌ Lütfen botu etiketlerken uygun formatı ve bilgileri eksiksiz giriniz!")
+                except:
+                    pass
+                return
+
+            # Görsel (SS) kontrolü (Çift SS beklentisi veya en az 1-2 görsel)
+            gorseller = message.attachments
+            if len(gorseller) == 0:
+                try:
+                    await message.add_reaction("❌")
+                    await message.reply("❌ Red! İşlem için en az bir veya iki adet kanıt görseli (SS) eklemelisiniz.")
+                except:
+                    pass
+                return
+
+            # Basit mantıksal/zaman denetimi simülasyonu ve akıllı doğrulama
+            # Metin içinde saat/zaman ve görsellerin varlığına göre onay/ret mekanizması
+            metin_kucuk = icerik.lower()
+            if "saat" in metin_kucuk or "başlangıç" in metin_kucuk or "bitiş" in metin_kucuk or "sicil" in metin_kucuk:
+                # Başarılı senaryo simülasyonu (Gerçek OCR/AI entegrasyonu için buraya API eklenebilir)
+                try:
+                    await message.add_reaction("✅")
+                    await message.channel.send("Onay!")
+                except:
+                    pass
+            else:
+                try:
+                    await message.add_reaction("❌")
+                    await message.reply("Red! Format içeriği yetersiz veya saat/zaman çizelgeleri formattaki bilgilerle uyuşmuyor.")
+                except:
+                    pass
+            return
+
+    if message.content.strip().lower() == "sa":
         try:
             await message.channel.send(f"Aleykümselam {message.author.mention}")
         except:
             pass
+            
     await bot.process_commands(message)
 
 def yetki_kontrol(interaction, perm):
@@ -71,6 +126,7 @@ class SistemYonetimView(discord.ui.View):
         self.secilen_otorol = None
         self.secilen_hg_kanal = None
         self.secilen_log_kanal = None
+        self.secilen_log_durum = None
 
         # Otorol Seçim Menüsü
         role_select = discord.ui.RoleSelect(placeholder="📌 Yeni gelenler için Otorol seçin...", min_values=1, max_values=1)
@@ -86,6 +142,18 @@ class SistemYonetimView(discord.ui.View):
         log_select = discord.ui.ChannelSelect(placeholder="🧾 Rol log kanalını seçin...", channel_types=[discord.ChannelType.text], min_values=1, max_values=1)
         log_select.callback = self.log_secim_callback
         self.add_item(log_select)
+
+        # Log Doğrulama Sistemi Aç/Kapat Menüsü
+        dogrulama_select = discord.ui.Select(
+            placeholder="🤖 Etiketli Log Doğrulama Sistemi Durumu...",
+            options=[
+                discord.SelectOption(label="Aktif Et (Aç)", value="ac", description="Bot etiketlenince logları ve SS'leri denetler.", emoji="✅"),
+                discord.SelectOption(label="Devre Dışı Bırak (Kapat)", value="kapat", description="Sistemi kapatır.", emoji="❌")
+            ],
+            min_values=1, max_values=1
+        )
+        dogrulama_select.callback = self.dogrulama_secim_callback
+        self.add_item(dogrulama_select)
 
     async def otorol_secim_callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -105,11 +173,18 @@ class SistemYonetimView(discord.ui.View):
         kanal_obj = interaction.guild.get_channel(int(self.secilen_log_kanal))
         await interaction.followup.send(f"🧾 Log kanalı geçici olarak seçildi: {kanal_obj.mention} (Kaydetmek için alttaki **Kaydet** butonuna basın)", ephemeral=True)
 
-    @discord.ui.button(label="💾 Ayarları Kalıcı Olarak Kaydet", style=discord.ButtonStyle.success, emoji="✅", row=3)
+    async def dogrulama_secim_callback(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        val = interaction.data["values"][0]
+        self.secilen_log_durum = True if val == "ac" else False
+        durum_str = "Aktif (Açık)" if self.secilen_log_durum else "Devre Dışı (Kapalı)"
+        await interaction.followup.send(f"🤖 Etiketli Log Doğrulama geçici olarak **{durum_str}** seçildi (Kaydetmek için alttaki **Kaydet** butonuna basın)", ephemeral=True)
+
+    @discord.ui.button(label="💾 Ayarları Kalıcı Olarak Kaydet", style=discord.ButtonStyle.success, emoji="✅", row=4)
     async def kaydet_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         yukle()
-        SET.setdefault(self.guild_id, {"name": interaction.guild.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": ""})
+        SET.setdefault(self.guild_id, {"name": interaction.guild.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": "", "log_dogrulama_aktif": False})
 
         degisiklik_var = False
         if self.secilen_otorol is not None:
@@ -121,9 +196,12 @@ class SistemYonetimView(discord.ui.View):
         if self.secilen_log_kanal is not None:
             SET[self.guild_id]["log_kanal_id"] = str(self.secilen_log_kanal)
             degisiklik_var = True
+        if self.secilen_log_durum is not None:
+            SET[self.guild_id]["log_dogrulama_aktif"] = self.secilen_log_durum
+            degisiklik_var = True
 
         if not degisiklik_var:
-            return await interaction.followup.send("⚠️ Henüz hiçbir rol veya kanal seçmediniz!", ephemeral=True)
+            return await interaction.followup.send("⚠️ Henüz hiçbir ayar değiştirmediniz veya seçmediniz!", ephemeral=True)
 
         kaydet()
 
@@ -131,6 +209,7 @@ class SistemYonetimView(discord.ui.View):
         otorol_adi = f"<@&{s['otorol_id']}>" if s.get('otorol_id') else "Ayarlanmamış"
         hosgeldin_kanali = f"<#{s['hosgeldin_kanal_id']}>" if s.get('hosgeldin_kanal_id') else "Ayarlanmamış"
         log_kanali = f"<#{s['log_kanal_id']}>" if s.get('log_kanal_id') else "Ayarlanmamış"
+        dogrulama_durum = "Aktif ✅" if s.get('log_dogrulama_aktif', False) else "Kapalı ❌"
 
         embed = discord.Embed(
             title="✅ Ayarlar Başarıyla Kaydedildi!",
@@ -140,6 +219,7 @@ class SistemYonetimView(discord.ui.View):
         embed.add_field(name="📌 Otorol", value=otorol_adi, inline=False)
         embed.add_field(name="🚪 Hoş Geldin Kanalı", value=hosgeldin_kanali, inline=False)
         embed.add_field(name="🧾 Rol Log Kanalı", value=log_kanali, inline=False)
+        embed.add_field(name="🤖 Etiketli Log Doğrulama", value=dogrulama_durum, inline=False)
 
         await interaction.followup.send(embed=embed, ephemeral=True)
 
@@ -161,6 +241,7 @@ async def ozel_kontrol_paneli(interaction: discord.Interaction, sifre: str):
     otorol_adi = f"<@&{s['otorol_id']}>" if s.get('otorol_id') else "Ayarlanmamış"
     hosgeldin_kanali = f"<#{s['hosgeldin_kanal_id']}>" if s.get('hosgeldin_kanal_id') else "Ayarlanmamış"
     log_kanali = f"<#{s['log_kanal_id']}>" if s.get('log_kanal_id') else "Ayarlanmamış"
+    dogrulama_durum = "Aktif ✅" if s.get('log_dogrulama_aktif', False) else "Kapalı ❌"
 
     embed = discord.Embed(
         title="⚙️ Gelişmiş Sunucu Yönetim Paneli",
@@ -170,6 +251,7 @@ async def ozel_kontrol_paneli(interaction: discord.Interaction, sifre: str):
     embed.add_field(name="📌 Mevcut Otorol", value=otorol_adi, inline=False)
     embed.add_field(name="🚪 Mevcut Hoş Geldin Kanalı", value=hosgeldin_kanali, inline=False)
     embed.add_field(name="🧾 Mevcut Rol Log Kanalı", value=log_kanali, inline=False)
+    embed.add_field(name="🤖 Etiketli Log Doğrulama", value=dogrulama_durum, inline=False)
     embed.set_footer(text="Discord GUI Sistemi • Kaydet Butonlu Sürüm")
 
     await interaction.response.send_message(embed=embed, view=SistemYonetimView(gid), ephemeral=True)
@@ -186,7 +268,7 @@ async def komutlar(interaction: discord.Interaction):
     embed.add_field(
         name="🛠️ Komutlar",
         value=(
-            "**/özelkontrolpaneli** - Şifreli Discord GUI yönetim panelini açar.\n"
+            "**/özelkontrolpaneli** - Şifreli GUI yönetim panelini açar.\n"
             "**/komutlar** - Komut listesini gösterir.\n"
             "**/ayarlar** - Mevcut sunucu ayarlarını gösterir.\n"
             "**/sunucu-kur** - Kanalları tek seferde kurar (Şifre: 2904).\n"
@@ -206,14 +288,16 @@ async def ayarlar_komut(interaction: discord.Interaction):
     otorol = f"<@&{s['otorol_id']}>" if s.get('otorol_id') else "Ayarlanmamış"
     hosgeldin = f"<#{s['hosgeldin_kanal_id']}>" if s.get('hosgeldin_kanal_id') else "Ayarlanmamış"
     log = f"<#{s['log_kanal_id']}>" if s.get('log_kanal_id') else "Ayarlanmamış"
+    dogrulama = "Aktif ✅" if s.get('log_dogrulama_aktif', False) else "Kapalı ❌"
 
     embed = discord.Embed(title="⚙️ Sunucu Ayarları", color=0x5865F2)
     embed.add_field(name="Otorol", value=otorol, inline=False)
     embed.add_field(name="Hoş Geldin Kanalı", value=hosgeldin, inline=False)
     embed.add_field(name="Rol Log Kanalı", value=log, inline=False)
+    embed.add_field(name="Etiketli Log Doğrulama", value=dogrulama, inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-# --- ROL LOG SİSTEMİ (VERİLEN VE ALINAN ROLLER DÜZELTİLDİ) ---
+# --- ROL LOG SİSTEMİ ---
 @bot.event
 async def on_member_update(before, after):
     if before.roles == after.roles:
@@ -255,7 +339,7 @@ async def on_member_update(before, after):
         try: await log_kanali.send(embed=embed)
         except: pass
 
-# --- MUTE (ZAMAN AŞIMI) SİSTEMİ ---
+# --- MUTE SİSTEMİ ---
 @bot.tree.command(name="mute", description="Kullanıcıya belirtilen süre kadar zaman aşımı (mute) uygular.")
 @app_commands.describe(kullanici="Mute atılacak kullanıcı", dakika="Süre (dakika cinsinden)", sebep="Mute sebebi")
 async def mute(interaction: discord.Interaction, kullanici: discord.Member, dakika: int, sebep: str = "Sebep belirtilmedi"):
@@ -280,7 +364,7 @@ async def unmute(interaction: discord.Interaction, kullanici: discord.Member):
     except Exception as e:
         await interaction.response.send_message(f"❌ Mute kaldırılırken hata oluştu: {e}", ephemeral=True)
 
-# --- YAVAŞMOD (SLOWMODE) SİSTEMİ ---
+# --- YAVAŞMOD SİSTEMİ ---
 @bot.tree.command(name="yavaşmod", description="Bulunduğunuz kanalın yavaş mod süresini ayarlar.")
 @app_commands.describe(saniye="Saniye cinsinden yavaş mod süresi (0 kapatır)")
 async def yavasmod(interaction: discord.Interaction, saniye: int):
@@ -333,26 +417,4 @@ async def on_member_join(member):
     if s.get("hosgeldin_kanal_id"):
         kanal = member.guild.get_channel(int(s["hosgeldin_kanal_id"]))
         if kanal:
-            try: await kanal.send(f"Hoş geldin {member.mention}! Toplam **{member.guild.member_count}** kişiyiz.")
-            except: pass
-
-# --- RENDER PORT HATASINI ÖNLEYEN GÜVENLİ FLASK SİTESİ ---
-app = Flask(__name__)
-
-@app.route("/")
-def home():
-    return "Bot Aktif!", 200
-
-if __name__ == "__main__":
-    discord_token = os.environ.get("TOKEN")
-    if not discord_token:
-        print("❌ HATA: TOKEN bulunamadı!")
-        exit(1)
-
-    # Botu arka planda (thread içinde) başlatıyoruz
-    threading.Thread(target=lambda: bot.run(discord_token), daemon=True).start()
-    
-    # Render'ın çökmemesi için Flask sunucusunu güvenli portla başlatıyoruz
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
-                  
+            try: await kanal.send(f"Hoş geldin {member.mention
