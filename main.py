@@ -36,7 +36,6 @@ async def on_ready():
             "log_kanal_id": "",
             "log_dogrulama_aktif": False
         })
-        # Eksik anahtarları tamamla
         if "log_dogrulama_aktif" not in SET[g.id]:
             SET[g.id]["log_dogrulama_aktif"] = False
         SET[g.id]["name"] = g.name
@@ -60,11 +59,9 @@ async def on_message(message):
         gid = message.guild.id
         s = SET.get(gid, {})
         
-        # Sistem aktif mi kontrol et
         if s.get("log_dogrulama_aktif", False):
             icerik = message.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
             
-            # Format veya yazı kontrolü
             if not icerik or len(icerik) < 5:
                 try:
                     await message.add_reaction("❌")
@@ -73,7 +70,6 @@ async def on_message(message):
                     pass
                 return
 
-            # Görsel (SS) kontrolü (Çift SS beklentisi veya en az 1-2 görsel)
             gorseller = message.attachments
             if len(gorseller) == 0:
                 try:
@@ -83,11 +79,8 @@ async def on_message(message):
                     pass
                 return
 
-            # Basit mantıksal/zaman denetimi simülasyonu ve akıllı doğrulama
-            # Metin içinde saat/zaman ve görsellerin varlığına göre onay/ret mekanizması
             metin_kucuk = icerik.lower()
             if "saat" in metin_kucuk or "başlangıç" in metin_kucuk or "bitiş" in metin_kucuk or "sicil" in metin_kucuk:
-                # Başarılı senaryo simülasyonu (Gerçek OCR/AI entegrasyonu için buraya API eklenebilir)
                 try:
                     await message.add_reaction("✅")
                     await message.channel.send("Onay!")
@@ -128,22 +121,18 @@ class SistemYonetimView(discord.ui.View):
         self.secilen_log_kanal = None
         self.secilen_log_durum = None
 
-        # Otorol Seçim Menüsü
         role_select = discord.ui.RoleSelect(placeholder="📌 Yeni gelenler için Otorol seçin...", min_values=1, max_values=1)
         role_select.callback = self.otorol_secim_callback
         self.add_item(role_select)
 
-        # Hoş Geldin Kanalı Seçim Menüsü
         hosgeldin_select = discord.ui.ChannelSelect(placeholder="🚪 Hoş geldin kanalını seçin...", channel_types=[discord.ChannelType.text], min_values=1, max_values=1)
         hosgeldin_select.callback = self.hosgeldin_secim_callback
         self.add_item(hosgeldin_select)
 
-        # Log Kanalı Seçim Menüsü
         log_select = discord.ui.ChannelSelect(placeholder="🧾 Rol log kanalını seçin...", channel_types=[discord.ChannelType.text], min_values=1, max_values=1)
         log_select.callback = self.log_secim_callback
         self.add_item(log_select)
 
-        # Log Doğrulama Sistemi Aç/Kapat Menüsü
         dogrulama_select = discord.ui.Select(
             placeholder="🤖 Etiketli Log Doğrulama Sistemi Durumu...",
             options=[
@@ -223,7 +212,6 @@ class SistemYonetimView(discord.ui.View):
 
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-
 # --- ÖZEL KONTROL PANELİ KOMUTU ---
 @bot.tree.command(name="özelkontrolpaneli", description="Şifre ile korunan gelişmiş Discord GUI kontrol panelini açar.")
 @app_commands.describe(sifre="Panel erişim şifresi")
@@ -256,8 +244,6 @@ async def ozel_kontrol_paneli(interaction: discord.Interaction, sifre: str):
 
     await interaction.response.send_message(embed=embed, view=SistemYonetimView(gid), ephemeral=True)
 
-
-# --- DİĞER TEMEL SİSTEMLER VE KOMUTLAR ---
 @bot.tree.command(name="komutlar", description="Aktif bot komutlarını gösterir.")
 async def komutlar(interaction: discord.Interaction):
     embed = discord.Embed(
@@ -297,7 +283,6 @@ async def ayarlar_komut(interaction: discord.Interaction):
     embed.add_field(name="Etiketli Log Doğrulama", value=dogrulama, inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-# --- ROL LOG SİSTEMİ ---
 @bot.event
 async def on_member_update(before, after):
     if before.roles == after.roles:
@@ -321,7 +306,6 @@ async def on_member_update(before, after):
     except:
         pass
 
-    # Verilen Roller
     for rol in [r for r in after.roles if r not in before.roles]:
         embed = discord.Embed(title="✅ Rol Verildi", color=0x57F287, timestamp=datetime.datetime.now())
         embed.add_field(name="Kullanıcı", value=after.mention, inline=False)
@@ -330,7 +314,6 @@ async def on_member_update(before, after):
         try: await log_kanali.send(embed=embed)
         except: pass
 
-    # Alınan (Silinen) Roller
     for rol in [r for r in before.roles if r not in after.roles]:
         embed = discord.Embed(title="❌ Rol Alındı", color=0xED4245, timestamp=datetime.datetime.now())
         embed.add_field(name="Kullanıcı", value=after.mention, inline=False)
@@ -339,53 +322,45 @@ async def on_member_update(before, after):
         try: await log_kanali.send(embed=embed)
         except: pass
 
-# --- MUTE SİSTEMİ ---
 @bot.tree.command(name="mute", description="Kullanıcıya belirtilen süre kadar zaman aşımı (mute) uygular.")
 @app_commands.describe(kullanici="Mute atılacak kullanıcı", dakika="Süre (dakika cinsinden)", sebep="Mute sebebi")
 async def mute(interaction: discord.Interaction, kullanici: discord.Member, dakika: int, sebep: str = "Sebep belirtilmedi"):
     if not yetki_kontrol(interaction, "moderate_members"):
-        return await hata_mesaji(interaction, "Bu komutu kullanmak için 'Üyeleri Zaman Aşımına Uğrat' yetkiniz olmalı.")
+        return await hata_mesaji(interaction, "Bu komutu kullanmak için yetkiniz yok.")
     try:
         sure = datetime.timedelta(minutes=dakika)
         await kullanici.timeout(sure, reason=sebep)
-        await interaction.response.send_message(f"🔇 {kullanici.mention} isimli kullanıcı başarıyla **{dakika} dakika** süreyle muteleendi. Sebep: `{sebep}`", ephemeral=True)
+        await interaction.response.send_message(f"🔇 {kullanici.mention} başarıyla **{dakika} dakika** süreyle mutelendi.", ephemeral=True)
     except Exception as e:
-        await interaction.response.send_message(f"❌ Mute atılırken bir hata oluştu: {e}", ephemeral=True)
+        await interaction.response.send_message(f"❌ Hata: {e}", ephemeral=True)
 
-# --- UNMUTE SİSTEMİ ---
 @bot.tree.command(name="unmute", description="Kullanıcının zaman aşımını (mute) kaldırır.")
 @app_commands.describe(kullanici="Mutesi kaldırılacak kullanıcı")
 async def unmute(interaction: discord.Interaction, kullanici: discord.Member):
     if not yetki_kontrol(interaction, "moderate_members"):
-        return await hata_mesaji(interaction, "Bu komutu kullanmak için 'Üyeleri Zaman Aşımına Uğrat' yetkiniz olmalı.")
+        return await hata_mesaji(interaction, "Yetkiniz yok.")
     try:
         await kullanici.timeout(None)
-        await interaction.response.send_message(f"🔊 {kullanici.mention} isimli kullanıcının mutesi kaldırıldı.", ephemeral=True)
+        await interaction.response.send_message(f"🔊 {kullanici.mention} mutesi kaldırıldı.", ephemeral=True)
     except Exception as e:
-        await interaction.response.send_message(f"❌ Mute kaldırılırken hata oluştu: {e}", ephemeral=True)
+        await interaction.response.send_message(f"❌ Hata: {e}", ephemeral=True)
 
-# --- YAVAŞMOD SİSTEMİ ---
-@bot.tree.command(name="yavaşmod", description="Bulunduğunuz kanalın yavaş mod süresini ayarlar.")
-@app_commands.describe(saniye="Saniye cinsinden yavaş mod süresi (0 kapatır)")
+@bot.tree.command(name="yavaşmod", description="Kanalın yavaş mod süresini ayarlar.")
+@app_commands.describe(saniye="Saniye cinsinden süre (0 kapatır)")
 async def yavasmod(interaction: discord.Interaction, saniye: int):
     if not yetki_kontrol(interaction, "manage_channels"):
-        return await hata_mesaji(interaction, "Bu komutu kullanmak için 'Kanalları Yönet' yetkiniz olmalı.")
+        return await hata_mesaji(interaction, "Yetkiniz yok.")
     try:
         await interaction.channel.edit(slowmode_delay=saniye)
-        if saniye == 0:
-            await interaction.response.send_message("⏱️ Bu kanaldaki yavaş mod kapatıldı.", ephemeral=True)
-        else:
-            await interaction.response.send_message(f"⏱️ Bu kanalın yavaş mod süresi **{saniye} saniye** olarak ayarlandı.", ephemeral=True)
+        await interaction.response.send_message(f"⏱️ Yavaş mod **{saniye} saniye** olarak ayarlandı.", ephemeral=True)
     except Exception as e:
-        await interaction.response.send_message(f"❌ Yavaş mod ayarlanırken hata oluştu: {e}", ephemeral=True)
+        await interaction.response.send_message(f"❌ Hata: {e}", ephemeral=True)
 
-@bot.tree.command(name="sunucu-kur", description="Tüm kategorileri ve kanalları tek seferde kurar.")
+@bot.tree.command(name="sunucu-kur", description="Kanalları kurar.")
 @app_commands.describe(sifre="Kurulum şifresi")
 async def sunucu_kur(interaction: discord.Interaction, sifre: str):
-    if sifre != "2904":
-        return await hata_mesaji(interaction, "Hatalı şifre!")
-    if not yetki_kontrol(interaction, "manage_channels"):
-        return await hata_mesaji(interaction, "Yetkiniz yok!")
+    if sifre != "2904" or not yetki_kontrol(interaction, "manage_channels"):
+        return await hata_mesaji(interaction, "Hatalı şifre veya yetki!")
     await interaction.response.defer()
     guild = interaction.guild
     try:
@@ -417,4 +392,22 @@ async def on_member_join(member):
     if s.get("hosgeldin_kanal_id"):
         kanal = member.guild.get_channel(int(s["hosgeldin_kanal_id"]))
         if kanal:
-            try: await kanal.send(f"Hoş geldin {member.mention
+            try: await kanal.send(f"Hoş geldin {member.mention}! Toplam **{member.guild.member_count}** kişiyiz.")
+            except: pass
+
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Bot Aktif!", 200
+
+if __name__ == "__main__":
+    discord_token = os.environ.get("TOKEN")
+    if not discord_token:
+        print("❌ HATA: TOKEN bulunamadı!")
+        exit(1)
+
+    threading.Thread(target=lambda: bot.run(discord_token), daemon=True).start()
+    
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
