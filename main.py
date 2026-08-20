@@ -28,8 +28,8 @@ bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 LOG_YANITLARI = {}
 
 async def akilli_metin_log_denetimi(icerik, gorsel_sayisi):
-    # En az 2 görsel eklenmiş mi kontrol et
-    if gorsel_sayisi < 2:
+    # En az 1 görsel eklenmiş mi kontrol et
+    if gorsel_sayisi < 1:
         return False
 
     # Mesaj içerisindeki saatleri yakala (Örn: 14:30, 16:00)
@@ -53,7 +53,6 @@ async def akilli_metin_log_denetimi(icerik, gorsel_sayisi):
         hesaplanan_saat = fark_dakika / 60.0
         belirtilen_sure = float(sure_ifadeleri[0].replace(',', '.'))
 
-        # Hesaplanan saat ile metinde belirtilen süre 1.5 saatten fazla uyuşmuyorsa reddet
         if abs(hesaplanan_saat - belirtilen_sure) > 1.5:
             return False
     except Exception as e:
@@ -99,16 +98,15 @@ async def on_message(message):
             icerik = message.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
             gorsel_sayisi = len(message.attachments)
             
-            if not icerik or len(icerik) < 5 or gorsel_sayisi < 2:
+            if not icerik or len(icerik) < 5 or gorsel_sayisi < 1:
                 try:
                     await message.add_reaction("❌")
-                    yanit = await message.reply("Lütfen iki adet ekran görüntüsü ve uygun formatta saat/süre bilgisi giriniz!")
+                    yanit = await message.reply("Lütfen gerekli kanıtların ekran görüntüsünü ve uygun formatı giriniz!")
                     LOG_YANITLARI[message.id] = yanit.id
                 except:
                     pass
                 return
 
-            # Görsel uzantı kontrolü
             for gorsel in message.attachments:
                 if not any(gorsel.filename.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.webp']):
                     try:
@@ -124,14 +122,14 @@ async def on_message(message):
             if basarili_mi:
                 try:
                     await message.add_reaction("✅")
-                    yanit = await message.channel.send("Log başarıyla onaylandı! ✅")
+                    yanit = await message.channel.send("Onay!")
                     LOG_YANITLARI[message.id] = yanit.id
                 except:
                     pass
             else:
                 try:
                     await message.add_reaction("❌")
-                    yanit = await message.reply("Girilen saatler ile belirtilen süre uyuşmuyor! Lütfen kontrol edin.")
+                    yanit = await message.reply("Girilen saatler ile belirtilen süre uyuşmuyor, lütfen kontrol edin.")
                     LOG_YANITLARI[message.id] = yanit.id
                 except:
                     pass
@@ -144,6 +142,72 @@ async def on_message(message):
             pass
             
     await bot.process_commands(message)
+
+@bot.event
+async def on_message_edit(before, after):
+    if after.author.bot:
+        return
+    if not after.guild:
+        return
+
+    if bot.user.mentioned_in(after) and not after.mention_everyone:
+        yukle()
+        gid = after.guild.id
+        s = SET.get(gid, {})
+        
+        if s.get("log_dogrulama_aktif", False):
+            # Önceki bot yanıtını ve reaksiyonları temizle
+            if after.id in LOG_YANITLARI:
+                try:
+                    eski_yanit = await after.channel.fetch_message(LOG_YANITLARI[after.id])
+                    await eski_yanit.delete()
+                except:
+                    pass
+                del LOG_YANITLARI[after.id]
+
+            try:
+                await after.clear_reactions()
+            except:
+                pass
+
+            icerik = after.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
+            gorsel_sayisi = len(after.attachments)
+            
+            if not icerik or len(icerik) < 5 or gorsel_sayisi < 1:
+                try:
+                    await after.add_reaction("❌")
+                    yanit = await after.reply("Lütfen gerekli kanıtların ekran görüntüsünü ve uygun formatı giriniz!")
+                    LOG_YANITLARI[after.id] = yanit.id
+                except:
+                    pass
+                return
+
+            for gorsel in after.attachments:
+                if not any(gorsel.filename.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.webp']):
+                    try:
+                        await after.add_reaction("❌")
+                        yanit = await after.reply("Lütfen geçerli görsel formatları (png, jpg) yükleyin!")
+                        LOG_YANITLARI[after.id] = yanit.id
+                    except:
+                        pass
+                    return
+
+            basarili_mi = await akilli_metin_log_denetimi(icerik, gorsel_sayisi)
+            
+            if basarili_mi:
+                try:
+                    await after.add_reaction("✅")
+                    yanit = await after.channel.send("Onay!")
+                    LOG_YANITLARI[after.id] = yanit.id
+                except:
+                    pass
+            else:
+                try:
+                    await after.add_reaction("❌")
+                    yanit = await after.reply("Girilen saatler ile belirtilen süre uyuşmuyor, lütfen kontrol edin.")
+                    LOG_YANITLARI[after.id] = yanit.id
+                except:
+                    pass
 
 @bot.event
 async def on_message_delete(message):
@@ -190,7 +254,7 @@ class SistemYonetimView(discord.ui.View):
         dogrulama_select = discord.ui.Select(
             placeholder="🤖 Metin Tabanlı Akıllı Log Doğrulama...",
             options=[
-                discord.SelectOption(label="Aktif Et (Aç)", value="ac", description="Bot etiketlenince çift SS ve saat matematiğini denetler.", emoji="✅"),
+                discord.SelectOption(label="Aktif Et (Aç)", value="ac", description="Bot etiketlenince SS ve saat matematiğini denetler.", emoji="✅"),
                 discord.SelectOption(label="Devre Dışı Bırak (Kapat)", value="kapat", description="Sistemi kapatır.", emoji="❌")
             ],
             min_values=1, max_values=1
@@ -362,4 +426,4 @@ if __name__ == "__main__":
     threading.Thread(target=lambda: bot.run(discord_token), daemon=True).start()
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
-                  
+    
