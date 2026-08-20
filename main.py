@@ -447,5 +447,6 @@ async def sunucu_kur(interaction: discord.Interaction, sifre: str):
     await interaction.response.defer()
     guild = interaction.guild
     try:
-        kat1 = await guild.create_category("「📌」Önemli")
-        for isim in ["「❓」biz-kimiz", "「🚪」gelen-gide
+        kat1 = await guild.create_category("Genel Bilgi")
+        for isim in ["biz-kimiz", "gelen-giden"]:
+ 
