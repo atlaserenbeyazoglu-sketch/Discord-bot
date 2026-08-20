@@ -1,4 +1,4 @@
-import discord, json, os, datetime, threading, aiohttp
+import discord, json, os, datetime, threading
 from discord.ext import commands
 from discord import app_commands
 from flask import Flask
@@ -25,7 +25,6 @@ def kaydet():
 yukle()
 bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
-# Kullanıcı mesajları ile botun yanıtlarını eşleştirmek için geçici hafıza (Mesaj Silme Takibi İçin)
 LOG_YANITLARI = {}
 
 @bot.event
@@ -56,7 +55,6 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    # --- GELİŞMİŞ ETİKETLİ LOG & ROBLOX SS DOĞRULAMA SİSTEMİ ---
     if bot.user.mentioned_in(message) and not message.mention_everyone:
         yukle()
         gid = message.guild.id
@@ -65,7 +63,6 @@ async def on_message(message):
         if s.get("log_dogrulama_aktif", False):
             icerik = message.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
             
-            # Format veya yazı kontrolü
             if not icerik or len(icerik) < 5:
                 try:
                     await message.add_reaction("❌")
@@ -75,7 +72,6 @@ async def on_message(message):
                     pass
                 return
 
-            # Roblox SS (Görsel) Kontrolü (En az 2 SS: Başlangıç ve Bitiş)
             gorseller = message.attachments
             if len(gorseller) < 2:
                 try:
@@ -88,7 +84,6 @@ async def on_message(message):
 
             metin_kucuk = icerik.lower()
             
-            # Formatta saat veya zaman ibaresi kontrolü ve detaylı analiz
             if ("saat" in metin_kucuk or ":" in metin_kucuk) and ("başlangıç" in metin_kucuk or "bitiş" in metin_kucuk or "süre" in metin_kucuk):
                 try:
                     await message.add_reaction("✅")
@@ -113,7 +108,6 @@ async def on_message(message):
             
     await bot.process_commands(message)
 
-# --- KULLANICI MESAJINI SİLDİĞİNDE BOTUN YANITINI OTOMATİK SİLME SİSTEMİ ---
 @bot.event
 async def on_message_delete(message):
     if message.id in LOG_YANITLARI:
@@ -135,7 +129,6 @@ async def hata_mesaji(interaction, metin):
     else:
         await interaction.response.send_message(f"❌ {metin}", ephemeral=True)
 
-# --- GUI KONTROL PANELİ VE GEÇİCİ HAFIZA + KAYDET BUTONU ---
 class SistemYonetimView(discord.ui.View):
     def __init__(self, guild_id):
         super().__init__(timeout=180)
@@ -236,7 +229,6 @@ class SistemYonetimView(discord.ui.View):
 
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-# --- ÖZEL KONTROL PANELİ KOMUTU ---
 @bot.tree.command(name="özelkontrolpaneli", description="Şifre ile korunan gelişmiş Discord GUI kontrol panelini açar.")
 @app_commands.describe(sifre="Panel erişim şifresi")
 async def ozel_kontrol_paneli(interaction: discord.Interaction, sifre: str):
@@ -421,8 +413,22 @@ async def on_member_join(member):
             except: 
                 pass
 
+# --- RENDER WEB SUNUCUSU (FLASK) ---
 app = Flask(__name__)
 
 @app.route("/")
 def home():
-    r
+    return "Bot Aktif!", 200
+
+if __name__ == "__main__":
+    discord_token = os.environ.get("TOKEN")
+    if not discord_token:
+        print("❌ HATA: TOKEN bulunamadı!")
+        exit(1)
+
+    # Discord botunu arka planda thread ile çalıştırıyoruz
+    threading.Thread(target=lambda: bot.run(discord_token), daemon=True).start()
+    
+    # Render'ın portuna Flask'ı ana akışta bağlıyoruz (Application exited early hatasını önler)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=po
