@@ -1,18 +1,10 @@
-import discord, json, os, datetime, threading, re, io
+import discord, json, os, datetime, threading, re
 from discord.ext import commands
 from discord import app_commands
 from flask import Flask
-import easyocr
-import cv2
-import numpy as np
-from PIL import Image
 
 DOSYA = "ayarlar.json"
 SET = {}
-
-print("🤖 Yapay Zeka OCR Görsel Analiz Motoru Yükleniyor...")
-reader = easyocr.Reader(['en'], gpu=False)
-print("✅ OCR Motoru Hazır!")
 
 def yukle():
     global SET
@@ -35,57 +27,52 @@ bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
 LOG_YANITLARI = {}
 
-async def gorselden_saat_oku(gorsel_attachment):
-    try:
-        veri = await gorsel_attachment.read()
-        image = Image.open(io.BytesIO(veri)).convert('RGB')
-        img_np = np.array(image)
-        h, w, _ = img_np.shape
-        ust_kisim = img_np[0:int(h * 0.25), int(w * 0.35):int(w * 0.65)]
-        sonuclar = reader.readtext(ust_kisim)
-        bulunan_saatler = []
-        for bbox, text, prob in sonuclar:
-            temiz_text = re.sub(r'[^0-9:]', '', text)
-            saat_eslesme = re.search(r'(\d{1,2}):(\d{2})', temiz_text)
-            if saat_eslesme:
-                bulunan_saatler.append(saat_eslesme.group(0))
-        if bulunan_saatler:
-            return bulunan_saatler[0]
-    except Exception as e:
-        print(f"OCR Okuma Hatası: {e}")
-    return None
+async def akilli_metin_log_denetimi(icerik, gorsel_sayisi):
+    # En az 2 görsel eklenmiş mi kontrol et
+    if gorsel_sayisi < 2:
+        return False
 
-async def akilli_log_denetimi(icerik, gorseller):
+    # Mesaj içerisindeki saatleri yakala (Örn: 14:30, 16:00)
     saatler = re.findall(r'(\d{1,2}):(\d{2})', icerik)
+    # Süre ifadelerini yakala (Örn: 2 saat, 1.5 saat, 2s)
     sure_ifadeleri = re.findall(r'(\d+(?:[.,]\d+)?)\s*(?:saat|s|st)', icerik.lower())
+
     if len(saatler) < 2 or not sure_ifadeleri:
         return False
+
     try:
         h1, m1 = int(saatler[0][0]), int(saatler[0][1])
         h2, m2 = int(saatler[1][0]), int(saatler[1][1])
+        
         dakika1 = h1 * 60 + m1
         dakika2 = h2 * 60 + m2
         fark_dakika = dakika2 - dakika1
         if fark_dakika < 0:
-            fark_dakika += 24 * 60
+            fark_dakika += 24 * 60 # Gece yarısını geçenler için
+
         hesaplanan_saat = fark_dakika / 60.0
         belirtilen_sure = float(sure_ifadeleri[0].replace(',', '.'))
+
+        # Hesaplanan saat ile metinde belirtilen süre 1.5 saatten fazla uyuşmuyorsa reddet
         if abs(hesaplanan_saat - belirtilen_sure) > 1.5:
             return False
-        ss_baslangic_saati = await gorselden_saat_oku(gorseller[0])
-        ss_bitis_saati = await gorselden_saat_oku(gorseller[1])
-        if not ss_baslangic_saati or not ss_bitis_saati:
-            pass
     except Exception as e:
-        print(f"Denetim Hatası: {e}")
+        print(f"Metin Denetim Hatası: {e}")
         return False
+
     return True
 
 @bot.event
 async def on_ready():
     yukle()
     for g in bot.guilds:
-        SET.setdefault(g.id, {"name": g.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": "", "log_dogrulama_aktif": False})
+        SET.setdefault(g.id, {
+            "name": g.name, 
+            "otorol_id": "", 
+            "hosgeldin_kanal_id": "", 
+            "log_kanal_id": "",
+            "log_dogrulama_aktif": False
+        })
         if "log_dogrulama_aktif" not in SET[g.id]:
             SET[g.id]["log_dogrulama_aktif"] = False
         SET[g.id]["name"] = g.name
@@ -102,51 +89,60 @@ async def on_ready():
 async def on_message(message):
     if message.author.bot:
         return
+
     if bot.user.mentioned_in(message) and not message.mention_everyone:
         yukle()
         gid = message.guild.id
         s = SET.get(gid, {})
+        
         if s.get("log_dogrulama_aktif", False):
             icerik = message.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
-            if not icerik or len(icerik) < 5 or len(message.attachments) < 2:
+            gorsel_sayisi = len(message.attachments)
+            
+            if not icerik or len(icerik) < 5 or gorsel_sayisi < 2:
                 try:
                     await message.add_reaction("❌")
-                    yanit = await message.reply("Lütfen uygun formatı giriniz")
+                    yanit = await message.reply("Lütfen iki adet ekran görüntüsü ve uygun formatta saat/süre bilgisi giriniz!")
                     LOG_YANITLARI[message.id] = yanit.id
                 except:
                     pass
                 return
-            gorseller = message.attachments
-            for gorsel in gorseller:
+
+            # Görsel uzantı kontrolü
+            for gorsel in message.attachments:
                 if not any(gorsel.filename.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.webp']):
                     try:
                         await message.add_reaction("❌")
-                        yanit = await message.reply("Lütfen uygun formatı giriniz")
+                        yanit = await message.reply("Lütfen geçerli görsel formatları (png, jpg) yükleyin!")
                         LOG_YANITLARI[message.id] = yanit.id
                     except:
                         pass
                     return
-            basarili_mi = await akilli_log_denetimi(icerik, gorseller)
+
+            basarili_mi = await akilli_metin_log_denetimi(icerik, gorsel_sayisi)
+            
             if basarili_mi:
                 try:
                     await message.add_reaction("✅")
-                    yanit = await message.channel.send("Onay!")
+                    yanit = await message.channel.send("Log başarıyla onaylandı! ✅")
                     LOG_YANITLARI[message.id] = yanit.id
                 except:
                     pass
             else:
                 try:
                     await message.add_reaction("❌")
-                    yanit = await message.reply("Lütfen uygun formatı giriniz")
+                    yanit = await message.reply("Girilen saatler ile belirtilen süre uyuşmuyor! Lütfen kontrol edin.")
                     LOG_YANITLARI[message.id] = yanit.id
                 except:
                     pass
             return
+
     if message.content.strip().lower() == "sa":
         try:
             await message.channel.send(f"Aleykümselam {message.author.mention}")
         except:
             pass
+            
     await bot.process_commands(message)
 
 @bot.event
@@ -178,19 +174,23 @@ class SistemYonetimView(discord.ui.View):
         self.secilen_hg_kanal = None
         self.secilen_log_kanal = None
         self.secilen_log_durum = None
+
         role_select = discord.ui.RoleSelect(placeholder="📌 Yeni gelenler için Otorol seçin...", min_values=1, max_values=1)
         role_select.callback = self.otorol_secim_callback
         self.add_item(role_select)
+
         hosgeldin_select = discord.ui.ChannelSelect(placeholder="🚪 Hoş geldin kanalını seçin...", channel_types=[discord.ChannelType.text], min_values=1, max_values=1)
         hosgeldin_select.callback = self.hosgeldin_secim_callback
         self.add_item(hosgeldin_select)
+
         log_select = discord.ui.ChannelSelect(placeholder="🧾 Rol log kanalını seçin...", channel_types=[discord.ChannelType.text], min_values=1, max_values=1)
         log_select.callback = self.log_secim_callback
         self.add_item(log_select)
+
         dogrulama_select = discord.ui.Select(
-            placeholder="🤖 Roblox Akıllı Log & Çift SS Doğrulama...",
+            placeholder="🤖 Metin Tabanlı Akıllı Log Doğrulama...",
             options=[
-                discord.SelectOption(label="Aktif Et (Aç)", value="ac", description="Bot etiketlenince saat ve çift SS'leri detaylı inceler.", emoji="✅"),
+                discord.SelectOption(label="Aktif Et (Aç)", value="ac", description="Bot etiketlenince çift SS ve saat matematiğini denetler.", emoji="✅"),
                 discord.SelectOption(label="Devre Dışı Bırak (Kapat)", value="kapat", description="Sistemi kapatır.", emoji="❌")
             ],
             min_values=1, max_values=1
@@ -202,7 +202,7 @@ class SistemYonetimView(discord.ui.View):
         await interaction.response.defer(ephemeral=True)
         self.secilen_otorol = interaction.data["values"][0]
         role_obj = interaction.guild.get_role(int(self.secilen_otorol))
-        await interaction.followup.send(f"📌 Otorol geçici olarak seçildi: **{role_obj.name}**", ephemeral=True)
+        await interaction.followup.send(f"📌 Otorol seçildi: **{role_obj.name}**", ephemeral=True)
 
     async def hosgeldin_secim_callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -228,10 +228,16 @@ class SistemYonetimView(discord.ui.View):
         await interaction.response.defer(ephemeral=True)
         yukle()
         SET.setdefault(self.guild_id, {"name": interaction.guild.name, "otorol_id": "", "hosgeldin_kanal_id": "", "log_kanal_id": "", "log_dogrulama_aktif": False})
-        if self.secilen_otorol is not None: SET[self.guild_id]["otorol_id"] = str(self.secilen_otorol)
-        if self.secilen_hg_kanal is not None: SET[self.guild_id]["hosgeldin_kanal_id"] = str(self.secilen_hg_kanal)
-        if self.secilen_log_kanal is not None: SET[self.guild_id]["log_kanal_id"] = str(self.secilen_log_kanal)
-        if self.secilen_log_durum is not None: SET[self.guild_id]["log_dogrulama_aktif"] = self.secilen_log_durum
+
+        if self.secilen_otorol is not None:
+            SET[self.guild_id]["otorol_id"] = str(self.secilen_otorol)
+        if self.secilen_hg_kanal is not None:
+            SET[self.guild_id]["hosgeldin_kanal_id"] = str(self.secilen_hg_kanal)
+        if self.secilen_log_kanal is not None:
+            SET[self.guild_id]["log_kanal_id"] = str(self.secilen_log_kanal)
+        if self.secilen_log_durum is not None:
+            SET[self.guild_id]["log_dogrulama_aktif"] = self.secilen_log_durum
+
         kaydet()
         await interaction.followup.send("✅ Ayarlar başarıyla kaydedildi!", ephemeral=True)
 
@@ -257,6 +263,7 @@ async def ayarlar_komut(interaction: discord.Interaction):
     embed.add_field(name="Otorol", value=f"<@&{s.get('otorol_id')}>" if s.get('otorol_id') else "Yok", inline=False)
     embed.add_field(name="Hoş Geldin Kanalı", value=f"<#{s.get('hosgeldin_kanal_id')}>" if s.get('hosgeldin_kanal_id') else "Yok", inline=False)
     embed.add_field(name="Rol Log Kanalı", value=f"<#{s.get('log_kanal_id')}>" if s.get('log_kanal_id') else "Yok", inline=False)
+    embed.add_field(name="Akıllı Log Doğrulama", value="Aktif ✅" if s.get('log_dogrulama_aktif', False) else "Kapalı ❌", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @bot.event
@@ -355,4 +362,4 @@ if __name__ == "__main__":
     threading.Thread(target=lambda: bot.run(discord_token), daemon=True).start()
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
-    
+                  
