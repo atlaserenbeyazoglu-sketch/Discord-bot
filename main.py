@@ -79,7 +79,7 @@ async def akilli_log_denetimi(icerik, gorseller):
         hesaplanan_saat = fark_dakika / 60.0
         belirtilen_sure = float(sure_ifadeleri[0].replace(',', '.'))
 
-        if abs(hesapulated_saat_farki := hesaplanan_saat - belirtilen_sure) > 1.5:
+        if abs(hesaplanan_saat - belirtilen_sure) > 1.5:
             return False
 
         ss_baslangic_saati = await gorselden_saat_oku(gorseller[0])
@@ -87,8 +87,8 @@ async def akilli_log_denetimi(icerik, gorseller):
 
         if not ss_baslangic_saati or not ss_bitis_saati:
             pass
-
-    except:
+    except Exception as e:
+        print(f"Denetim Hatası: {e}")
         return False
 
     return True
@@ -448,5 +448,4 @@ async def sunucu_kur(interaction: discord.Interaction, sifre: str):
     guild = interaction.guild
     try:
         kat1 = await guild.create_category("「📌」Önemli")
-        for isim in ["「❓」biz-kimiz", "「🚪」gelen-giden"]:
-            await gui
+        for isim in ["「❓」biz-kimiz", "「🚪」gelen-gide
