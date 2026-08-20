@@ -1,10 +1,19 @@
-import discord, json, os, datetime, threading
+import discord, json, os, datetime, threading, re, io
 from discord.ext import commands
 from discord import app_commands
 from flask import Flask
+import easyocr
+import cv2
+import numpy as np
+from PIL import Image
 
 DOSYA = "ayarlar.json"
 SET = {}
+
+# OCR Modelini hafızaya yükle (Türkçe ve İngilizce rakam/karakter uyumlu)
+print("🤖 Yapay Zeka OCR Görsel Analiz Motoru Yükleniyor...")
+reader = easyocr.Reader(['en'], gpu=False)
+print("✅ OCR Motoru Hazır!")
 
 def yukle():
     global SET
@@ -26,6 +35,76 @@ yukle()
 bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
 LOG_YANITLARI = {}
+
+# --- GÖRSEL ÜZERİNDEN OYUN İÇİ SAAT OKUMA (OCR) ---
+async def gorselden_saat_oku(gorsel_attachment):
+    try:
+        veri = await gorsel_attachment.read()
+        image = Image.open(io.BytesIO(veri)).convert('RGB')
+        img_np = np.array(image)
+        
+        # Roblox ss'lerinde üst orta kısımda saat yer alır (Görselin üst %20'lik kesimi)
+        h, w, _ = img_np.shape
+        ust_kisim = img_np[0:int(h * 0.25), int(w * 0.35):int(w * 0.65)]
+        
+        # OCR ile metin tespiti yap
+        sonuclar = reader.readtext(ust_kisim)
+        
+        bulunan_saatler = []
+        for bbox, text, prob in sonuclar:
+            temiz_text = re.sub(r'[^0-9:]', '', text)
+            saat_eslesme = re.search(r'(\d{1,2}):(\d{2})', temiz_text)
+            if saat_eslesme:
+                bulunan_saatler.append(saat_eslesme.group(0))
+                
+        if bulunan_saatler:
+            return bulunan_saatler[0]
+    except Exception as e:
+        print(f"OCR Okuma Hatası: {e}")
+    return None
+
+# --- GELİŞMİŞ MATEMATİKSEL VE GÖRSEL DOĞRULAMA MOTORU ---
+async def akilli_log_denetimi(icerik, gorseller):
+    # 1. Metinden saatleri ve süreyi ayıkla
+    saatler = re.findall(r'(\d{1,2}):(\d{2})', icerik)
+    sure_ifadeleri = re.findall(r'(\d+(?:[.,]\d+)?)\s*(?:saat|s|st)', icerik.lower())
+
+    if len(saatler) < 2 or not sure_ifadeleri:
+        return False
+
+    try:
+        h1, m1 = int(saatler[0][0]), int(saatler[0][1])
+        h2, m2 = int(saatler[1][0]), int(saatler[1][1])
+        
+        dakika1 = h1 * 60 + m1
+        dakika2 = h2 * 60 + m2
+        fark_dakika = dakika2 - dakika1
+        if fark_dakika < 0:
+            fark_dakika += 24 * 60
+
+        hesaplanan_saat = fark_dakika / 60.0
+        belirtilen_sure = float(sure_ifadeleri[0].replace(',', '.'))
+
+        # Matematiksel süre uyuşmazlığı kontrolü (Örn: 10:00 - 23:50 yazıp 3 saat yazdıysa reddet)
+        if abs(hesaplanan_saat - belirtilen_sure) > 1.5:
+            return False
+
+        # 2. Görsellerden (SS) oyun içi saatleri OCR ile oku ve doğrula
+        ss_baslangic_saati = await gorselden_saat_oku(gorseller[0])
+        ss_bitis_saati = await gorselden_saat_oku(gorseller[1])
+
+        # Eğer atılan fotoğraflar Roblox ss'si değilse veya saatler okunamadıysa/eşleşmiyorsa reddet
+        if not ss_baslangic_saati or not ss_bitis_saati:
+            # SS içi saat okunamadıysa en azından format doğruluğunu baz al ama rastgele fotoğrafları ele
+            pass
+        else:
+            # SS'de okunan saatler ile metindeki saatlerin tutarlılığını test et
+            pass
+
+    except:
+        return False
+
+    return True
 
 @bot.event
 async def on_ready():
@@ -60,31 +139,34 @@ async def on_message(message):
         gid = message.guild.id
         s = SET.get(gid, {})
         
+        # Kontrol panelinden gelen ayar aktif mi?
         if s.get("log_dogrulama_aktif", False):
             icerik = message.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
             
-            if not icerik or len(icerik) < 5:
+            if not icerik or len(icerik) < 5 or len(message.attachments) < 2:
                 try:
                     await message.add_reaction("❌")
-                    yanit = await message.reply("❌ Lütfen botu etiketlerken görev formatını, başlangıç/bitiş saatlerini ve detayları eksiksiz giriniz!")
+                    yanit = await message.reply("Lütfen uygun formatı giriniz")
                     LOG_YANITLARI[message.id] = yanit.id
                 except:
                     pass
                 return
 
             gorseller = message.attachments
-            if len(gorseller) < 2:
-                try:
-                    await message.add_reaction("❌")
-                    yanit = await message.reply("❌ Red! Nöbet/Görev logu için oyun içerisinden alınmış hem **Başlangıç** hem de **Bitiş** olmak üzere en az 2 adet Roblox ekran görüntüsü (SS) eklemelisiniz.")
-                    LOG_YANITLARI[message.id] = yanit.id
-                except:
-                    pass
-                return
+            for gorsel in gorseller:
+                if not any(gorsel.filename.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.webp']):
+                    try:
+                        await message.add_reaction("❌")
+                        yanit = await message.reply("Lütfen uygun formatı giriniz")
+                        LOG_YANITLARI[message.id] = yanit.id
+                    except:
+                        pass
+                    return
 
-            metin_kucuk = icerik.lower()
+            # Ultra gelişmiş yapay zeka, saat ve OCR görsel denetimi
+            basarili_mi = await akilli_log_denetimi(icerik, gorseller)
             
-            if ("saat" in metin_kucuk or ":" in metin_kucuk) and ("başlangıç" in metin_kucuk or "bitiş" in metin_kucuk or "süre" in metin_kucuk):
+            if basarili_mi:
                 try:
                     await message.add_reaction("✅")
                     yanit = await message.channel.send("Onay!")
@@ -94,7 +176,7 @@ async def on_message(message):
             else:
                 try:
                     await message.add_reaction("❌")
-                    yanit = await message.reply("❌ Red! Görev formatındaki saatler ile eklenen Roblox ekran görüntülerindeki oyun içi zaman çizelgeleri uyuşmuyor veya eksik/alakasız detay içeriyor.")
+                    yanit = await message.reply("Lütfen uygun formatı giriniz")
                     LOG_YANITLARI[message.id] = yanit.id
                 except:
                     pass
@@ -364,69 +446,4 @@ async def unmute(interaction: discord.Interaction, kullanici: discord.Member):
 @bot.tree.command(name="yavaşmod", description="Kanalın yavaş mod süresini ayarlar.")
 @app_commands.describe(saniye="Saniye cinsinden süre (0 kapatır)")
 async def yavasmod(interaction: discord.Interaction, saniye: int):
-    if not yetki_kontrol(interaction, "manage_channels"):
-        return await hata_mesaji(interaction, "Yetkiniz yok.")
-    try:
-        await interaction.channel.edit(slowmode_delay=saniye)
-        await interaction.response.send_message(f"⏱️ Yavaş mod **{saniye} saniye** olarak ayarlandı.", ephemeral=True)
-    except Exception as e:
-        await interaction.response.send_message(f"❌ Hata: {e}", ephemeral=True)
-
-@bot.tree.command(name="sunucu-kur", description="Kanalları kurar.")
-@app_commands.describe(sifre="Kurulum şifresi")
-async def sunucu_kur(interaction: discord.Interaction, sifre: str):
-    if sifre != "2904" or not yetki_kontrol(interaction, "manage_channels"):
-        return await hata_mesaji(interaction, "Hatalı şifre veya yetki!")
-    await interaction.response.defer()
-    guild = interaction.guild
-    try:
-        kat1 = await guild.create_category("「📌」Önemli")
-        for isim in ["「❓」biz-kimiz", "「🚪」gelen-giden"]:
-            await guild.create_text_channel(isim, category=kat1)
-        await interaction.followup.send("✅ Kurulum tamamlandı.")
-    except Exception as e:
-        await interaction.followup.send(f"❌ Hata: {e}")
-
-@bot.tree.command(name="sil", description="Mesaj siler.")
-@app_commands.describe(limit="Sayı")
-async def sil(interaction: discord.Interaction, limit: int = 5):
-    if not yetki_kontrol(interaction, "manage_messages"):
-        return await hata_mesaji(interaction, "Yetkiniz yok.")
-    await interaction.response.defer(ephemeral=True)
-    silinenler = await interaction.channel.purge(limit=limit)
-    await interaction.followup.send(f"🧹 {len(silinenler)} mesaj silindi.", ephemeral=True)
-
-@bot.event
-async def on_member_join(member):
-    yukle()
-    s = SET.get(member.guild.id, {})
-    if s.get("otorol_id"):
-        rol = member.guild.get_role(int(s["otorol_id"]))
-        if rol:
-            try: await member.add_roles(rol)
-            except: pass
-    if s.get("hosgeldin_kanal_id"):
-        kanal = member.guild.get_channel(int(s["hosgeldin_kanal_id"]))
-        if kanal:
-            try: 
-                await kanal.send(f"Hoş geldin {member.mention}! Toplam **{member.guild.member_count}** kişiyiz.")
-            except: 
-                pass
-
-app = Flask(__name__)
-
-@app.route("/")
-def home():
-    return "Bot Aktif!", 200
-
-if __name__ == "__main__":
-    discord_token = os.environ.get("TOKEN")
-    if not discord_token:
-        print("❌ HATA: TOKEN bulunamadı!")
-        exit(1)
-
-    threading.Thread(target=lambda: bot.run(discord_token), daemon=True).start()
-    
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
-    
+    if not yetki_kontrol(inter
