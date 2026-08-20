@@ -1,6 +1,2 @@
 discord.py
 Flask
-easyocr
-opencv-python-headless
-numpy
-Pillow
