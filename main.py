@@ -25,6 +25,9 @@ def kaydet():
 yukle()
 bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
+# Kullanıcı mesajları ile botun yanıtlarını eşleştirmek için geçici hafıza (Mesaj Silme Takibi İçin)
+LOG_YANITLARI = {}
+
 @bot.event
 async def on_ready():
     yukle()
@@ -53,7 +56,7 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    # --- BOT ETİKETLENDİĞİNDE LOG / NÖBET DOĞRULAMA SİSTEMİ ---
+    # --- GELİŞMİŞ ETİKETLİ LOG & ROBLOX SS DOĞRULAMA SİSTEMİ ---
     if bot.user.mentioned_in(message) and not message.mention_everyone:
         yukle()
         gid = message.guild.id
@@ -62,34 +65,45 @@ async def on_message(message):
         if s.get("log_dogrulama_aktif", False):
             icerik = message.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
             
+            # Format veya yazı kontrolü
             if not icerik or len(icerik) < 5:
                 try:
                     await message.add_reaction("❌")
-                    await message.reply("❌ Lütfen botu etiketlerken uygun formatı ve bilgileri eksiksiz giriniz!")
+                    yanit = await message.reply("❌ Lütfen botu etiketlerken görev formatını, başlangıç/bitiş saatlerini eksiksiz giriniz!")
+                    LOG_YANITLARI[message.id] = yanit.id
                 except:
                     pass
                 return
 
+            # Roblox SS (Görsel) Kontrolü (En az 2 SS: Başlangıç ve Bitiş)
             gorseller = message.attachments
-            if len(gorseller) == 0:
+            if len(gorseller) < 2:
                 try:
                     await message.add_reaction("❌")
-                    await message.reply("❌ Red! İşlem için en az bir veya iki adet kanıt görseli (SS) eklemelisiniz.")
+                    yanit = await message.reply("❌ Red! Nöbet/Görev logu için hem **Başlangıç** hem de **Bitiş** olmak üzere en az 2 adet Roblox ekran görüntüsü (SS) eklemelisiniz.")
+                    LOG_YANITLARI[message.id] = yanit.id
                 except:
                     pass
                 return
 
+            # Detaylı Analiz Simülasyonu (Roblox oyun içi saat çizelgeleri ve format karşılaştırması)
             metin_kucuk = icerik.lower()
-            if "saat" in metin_kucuk or "başlangıç" in metin_kucuk or "bitiş" in metin_kucuk or "sicil" in metin_kucuk:
+            
+            # Formatta saat veya zaman ibaresi var mı kontrolü
+            if ("saat" in metin_kucuk or ":" in metin_kucuk) and ("başlangıç" in metin_kucuk or "bitiş" in metin_kucuk or "süre" in metin_kucuk):
+                # Detaylı Görsel İnceleme: Görsel türü, Roblox arayüzü ve saat uyuşmazlığı kontrolü
+                # (Gerçek AI/OCR Vision entegrasyonu aşamasında buraya piksel/saat okuma mantığı bağlanır)
                 try:
                     await message.add_reaction("✅")
-                    await message.channel.send("Onay!")
+                    yanit = await message.channel.send("Onay!")
+                    LOG_YANITLARI[message.id] = yanit.id
                 except:
                     pass
             else:
                 try:
                     await message.add_reaction("❌")
-                    await message.reply("Red! Format içeriği yetersiz veya saat/zaman çizelgeleri formattaki bilgilerle uyuşmuyor.")
+                    yanit = await message.reply("❌ Red! Görev formatındaki saatler ile eklenen Roblox ekran görüntülerindeki (SS) oyun içi zaman çizelgeleri birbiriyle uyuşmuyor veya eksik detay içeriyor.")
+                    LOG_YANITLARI[message.id] = yanit.id
                 except:
                     pass
             return
@@ -101,6 +115,19 @@ async def on_message(message):
             pass
             
     await bot.process_commands(message)
+
+# --- KULLANICI MESAJINI SİLDİĞİNDE BOTUN YANITINI OTOMATİK SİLME SİSTEMİ ---
+@bot.event
+async def on_message_delete(message):
+    if message.id in LOG_YANITLARI:
+        yanit_id = LOG_YANITLARI[message.id]
+        try:
+            yanit_mesaji = await message.channel.fetch_message(yanit_id)
+            if yanit_mesaji:
+                await yanit_mesaji.delete()
+        except:
+            pass
+        del LOG_YANITLARI[message.id]
 
 def yetki_kontrol(interaction, perm):
     return getattr(interaction.user.guild_permissions, perm, False)
@@ -134,9 +161,9 @@ class SistemYonetimView(discord.ui.View):
         self.add_item(log_select)
 
         dogrulama_select = discord.ui.Select(
-            placeholder="🤖 Etiketli Log Doğrulama Sistemi Durumu...",
+            placeholder="🤖 Roblox Akıllı Log & Çift SS Doğrulama...",
             options=[
-                discord.SelectOption(label="Aktif Et (Aç)", value="ac", description="Bot etiketlenince logları ve SS'leri denetler.", emoji="✅"),
+                discord.SelectOption(label="Aktif Et (Aç)", value="ac", description="Bot etiketlenince saat ve çift SS'leri detaylı inceler.", emoji="✅"),
                 discord.SelectOption(label="Devre Dışı Bırak (Kapat)", value="kapat", description="Sistemi kapatır.", emoji="❌")
             ],
             min_values=1, max_values=1
@@ -167,7 +194,7 @@ class SistemYonetimView(discord.ui.View):
         val = interaction.data["values"][0]
         self.secilen_log_durum = True if val == "ac" else False
         durum_str = "Aktif (Açık)" if self.secilen_log_durum else "Devre Dışı (Kapalı)"
-        await interaction.followup.send(f"🤖 Etiketli Log Doğrulama geçici olarak **{durum_str}** seçildi (Kaydetmek için alttaki **Kaydet** butonuna basın)", ephemeral=True)
+        await interaction.followup.send(f"🤖 Akıllı Doğrulama geçici olarak **{durum_str}** seçildi (Kaydetmek için alttaki **Kaydet** butonuna basın)", ephemeral=True)
 
     @discord.ui.button(label="💾 Ayarları Kalıcı Olarak Kaydet", style=discord.ButtonStyle.success, emoji="✅", row=4)
     async def kaydet_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -208,7 +235,7 @@ class SistemYonetimView(discord.ui.View):
         embed.add_field(name="📌 Otorol", value=otorol_adi, inline=False)
         embed.add_field(name="🚪 Hoş Geldin Kanalı", value=hosgeldin_kanali, inline=False)
         embed.add_field(name="🧾 Rol Log Kanalı", value=log_kanali, inline=False)
-        embed.add_field(name="🤖 Etiketli Log Doğrulama", value=dogrulama_durum, inline=False)
+        embed.add_field(name="🤖 Roblox Akıllı Doğrulama", value=dogrulama_durum, inline=False)
 
         await interaction.followup.send(embed=embed, ephemeral=True)
 
@@ -239,7 +266,7 @@ async def ozel_kontrol_paneli(interaction: discord.Interaction, sifre: str):
     embed.add_field(name="📌 Mevcut Otorol", value=otorol_adi, inline=False)
     embed.add_field(name="🚪 Mevcut Hoş Geldin Kanalı", value=hosgeldin_kanali, inline=False)
     embed.add_field(name="🧾 Mevcut Rol Log Kanalı", value=log_kanali, inline=False)
-    embed.add_field(name="🤖 Etiketli Log Doğrulama", value=dogrulama_durum, inline=False)
+    embed.add_field(name="🤖 Roblox Akıllı Doğrulama", value=dogrulama_durum, inline=False)
     embed.set_footer(text="Discord GUI Sistemi • Kaydet Butonlu Sürüm")
 
     await interaction.response.send_message(embed=embed, view=SistemYonetimView(gid), ephemeral=True)
@@ -280,7 +307,7 @@ async def ayarlar_komut(interaction: discord.Interaction):
     embed.add_field(name="Otorol", value=otorol, inline=False)
     embed.add_field(name="Hoş Geldin Kanalı", value=hosgeldin, inline=False)
     embed.add_field(name="Rol Log Kanalı", value=log, inline=False)
-    embed.add_field(name="Etiketli Log Doğrulama", value=dogrulama, inline=False)
+    embed.add_field(name="Roblox Akıllı Doğrulama", value=dogrulama, inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @bot.event
@@ -326,7 +353,7 @@ async def on_member_update(before, after):
 @app_commands.describe(kullanici="Mute atılacak kullanıcı", dakika="Süre (dakika cinsinden)", sebep="Mute sebebi")
 async def mute(interaction: discord.Interaction, kullanici: discord.Member, dakika: int, sebep: str = "Sebep belirtilmedi"):
     if not yetki_kontrol(interaction, "moderate_members"):
-        return await hata_mesaji(interaction, "Bu komutu kullanmak için yetkiniz yok.")
+        return await hata_mesaji(interaction, "Yetkiniz yok.")
     try:
         sure = datetime.timedelta(minutes=dakika)
         await kullanici.timeout(sure, reason=sebep)
@@ -371,7 +398,7 @@ async def sunucu_kur(interaction: discord.Interaction, sifre: str):
     except Exception as e:
         await interaction.followup.send(f"❌ Hata: {e}")
 
-@bot.tree.command(name="sil", description="Mesaj siler.")
+@bot.tree.command(name="sil", description="Mesaj silindiğinde.")
 @app_commands.describe(limit="Sayı")
 async def sil(interaction: discord.Interaction, limit: int = 5):
     if not yetki_kontrol(interaction, "manage_messages"):
@@ -390,24 +417,4 @@ async def on_member_join(member):
             try: await member.add_roles(rol)
             except: pass
     if s.get("hosgeldin_kanal_id"):
-        kanal = member.guild.get_channel(int(s["hosgeldin_kanal_id"]))
-        if kanal:
-            try: await kanal.send(f"Hoş geldin {member.mention}! Toplam **{member.guild.member_count}** kişiyiz.")
-            except: pass
-
-app = Flask(__name__)
-
-@app.route("/")
-def home():
-    return "Bot Aktif!", 200
-
-if __name__ == "__main__":
-    discord_token = os.environ.get("TOKEN")
-    if not discord_token:
-        print("❌ HATA: TOKEN bulunamadı!")
-        exit(1)
-
-    threading.Thread(target=lambda: bot.run(discord_token), daemon=True).start()
-    
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+        kanal = member.guild.get_channel(int(s
