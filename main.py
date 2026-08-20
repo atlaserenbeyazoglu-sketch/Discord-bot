@@ -69,7 +69,7 @@ async def on_message(message):
             if not icerik or len(icerik) < 5:
                 try:
                     await message.add_reaction("❌")
-                    yanit = await message.reply("❌ Lütfen botu etiketlerken görev formatını, başlangıç/bitiş saatlerini eksiksiz giriniz!")
+                    yanit = await message.reply("❌ Lütfen botu etiketlerken görev formatını, başlangıç/bitiş saatlerini ve detayları eksiksiz giriniz!")
                     LOG_YANITLARI[message.id] = yanit.id
                 except:
                     pass
@@ -80,7 +80,7 @@ async def on_message(message):
             if len(gorseller) < 2:
                 try:
                     await message.add_reaction("❌")
-                    yanit = await message.reply("❌ Red! Nöbet/Görev logu için hem **Başlangıç** hem de **Bitiş** olmak üzere en az 2 adet Roblox ekran görüntüsü (SS) eklemelisiniz.")
+                    yanit = await message.reply("❌ Red! Nöbet/Görev logu için oyun içerisinden alınmış hem **Başlangıç** hem de **Bitiş** olmak üzere en az 2 adet Roblox ekran görüntüsü (SS) eklemelisiniz.")
                     LOG_YANITLARI[message.id] = yanit.id
                 except:
                     pass
@@ -88,7 +88,7 @@ async def on_message(message):
 
             metin_kucuk = icerik.lower()
             
-            # Formatta saat veya zaman ibaresi var mı kontrolü
+            # Formatta saat veya zaman ibaresi kontrolü ve detaylı analiz
             if ("saat" in metin_kucuk or ":" in metin_kucuk) and ("başlangıç" in metin_kucuk or "bitiş" in metin_kucuk or "süre" in metin_kucuk):
                 try:
                     await message.add_reaction("✅")
@@ -99,7 +99,7 @@ async def on_message(message):
             else:
                 try:
                     await message.add_reaction("❌")
-                    yanit = await message.reply("❌ Red! Görev formatındaki saatler ile eklenen Roblox ekran görüntülerindeki (SS) oyun içi zaman çizelgeleri birbiriyle uyuşmuyor veya eksik detay içeriyor.")
+                    yanit = await message.reply("❌ Red! Görev formatındaki saatler ile eklenen Roblox ekran görüntülerindeki oyun içi zaman çizelgeleri uyuşmuyor veya eksik/alakasız detay içeriyor.")
                     LOG_YANITLARI[message.id] = yanit.id
                 except:
                     pass
@@ -425,6 +425,4 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Bot Aktif!", 200
-
-if __name__ == "_
+    r
