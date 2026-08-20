@@ -448,5 +448,4 @@ async def sunucu_kur(interaction: discord.Interaction, sifre: str):
     guild = interaction.guild
     try:
         kat1 = await guild.create_category("Genel Bilgi")
-        for isim in ["biz-kimiz", "gelen-giden"]:
- 
+        [await guild.create_text_channel(isim, cate
