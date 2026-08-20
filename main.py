@@ -442,10 +442,12 @@ async def yavasmod(interaction: discord.Interaction, saniye: int):
 @bot.tree.command(name="sunucu-kur", description="Kanalları kurar.")
 @app_commands.describe(sifre="Kurulum şifresi")
 async def sunucu_kur(interaction: discord.Interaction, sifre: str):
-    if sifre != "2904" or not yetki_kontrol(interaction, "manage_channels"):
-        return await hata_mesaji(interaction, "Hatalı şifre veya yetki!")
+    if sifre != "2904":
+        return await hata_mesaji(interaction, "Hatalı şifre!")
+    if not yetki_kontrol(interaction, "manage_channels"):
+        return await hata_mesaji(interaction, "Yetkiniz yok!")
+        
     await interaction.response.defer()
     guild = interaction.guild
     try:
-        kat1 = await guild.create_category("Genel Bilgi")
-        await guild.create_text_channel("biz-kimiz"
+        kat1 = await guild.create_category(
