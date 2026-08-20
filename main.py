@@ -10,7 +10,6 @@ from PIL import Image
 DOSYA = "ayarlar.json"
 SET = {}
 
-# OCR Modelini hafızaya yükle (Türkçe ve İngilizce rakam/karakter uyumlu)
 print("🤖 Yapay Zeka OCR Görsel Analiz Motoru Yükleniyor...")
 reader = easyocr.Reader(['en'], gpu=False)
 print("✅ OCR Motoru Hazır!")
@@ -36,18 +35,15 @@ bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
 LOG_YANITLARI = {}
 
-# --- GÖRSEL ÜZERİNDEN OYUN İÇİ SAAT OKUMA (OCR) ---
 async def gorselden_saat_oku(gorsel_attachment):
     try:
         veri = await gorsel_attachment.read()
         image = Image.open(io.BytesIO(veri)).convert('RGB')
         img_np = np.array(image)
         
-        # Roblox ss'lerinde üst orta kısımda saat yer alır (Görselin üst %20'lik kesimi)
         h, w, _ = img_np.shape
         ust_kisim = img_np[0:int(h * 0.25), int(w * 0.35):int(w * 0.65)]
         
-        # OCR ile metin tespiti yap
         sonuclar = reader.readtext(ust_kisim)
         
         bulunan_saatler = []
@@ -63,9 +59,7 @@ async def gorselden_saat_oku(gorsel_attachment):
         print(f"OCR Okuma Hatası: {e}")
     return None
 
-# --- GELİŞMİŞ MATEMATİKSEL VE GÖRSEL DOĞRULAMA MOTORU ---
 async def akilli_log_denetimi(icerik, gorseller):
-    # 1. Metinden saatleri ve süreyi ayıkla
     saatler = re.findall(r'(\d{1,2}):(\d{2})', icerik)
     sure_ifadeleri = re.findall(r'(\d+(?:[.,]\d+)?)\s*(?:saat|s|st)', icerik.lower())
 
@@ -85,20 +79,13 @@ async def akilli_log_denetimi(icerik, gorseller):
         hesaplanan_saat = fark_dakika / 60.0
         belirtilen_sure = float(sure_ifadeleri[0].replace(',', '.'))
 
-        # Matematiksel süre uyuşmazlığı kontrolü (Örn: 10:00 - 23:50 yazıp 3 saat yazdıysa reddet)
-        if abs(hesaplanan_saat - belirtilen_sure) > 1.5:
+        if abs(hesapulated_saat_farki := hesaplanan_saat - belirtilen_sure) > 1.5:
             return False
 
-        # 2. Görsellerden (SS) oyun içi saatleri OCR ile oku ve doğrula
         ss_baslangic_saati = await gorselden_saat_oku(gorseller[0])
         ss_bitis_saati = await gorselden_saat_oku(gorseller[1])
 
-        # Eğer atılan fotoğraflar Roblox ss'si değilse veya saatler okunamadıysa/eşleşmiyorsa reddet
         if not ss_baslangic_saati or not ss_bitis_saati:
-            # SS içi saat okunamadıysa en azından format doğruluğunu baz al ama rastgele fotoğrafları ele
-            pass
-        else:
-            # SS'de okunan saatler ile metindeki saatlerin tutarlılığını test et
             pass
 
     except:
@@ -139,7 +126,6 @@ async def on_message(message):
         gid = message.guild.id
         s = SET.get(gid, {})
         
-        # Kontrol panelinden gelen ayar aktif mi?
         if s.get("log_dogrulama_aktif", False):
             icerik = message.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
             
@@ -163,7 +149,6 @@ async def on_message(message):
                         pass
                     return
 
-            # Ultra gelişmiş yapay zeka, saat ve OCR görsel denetimi
             basarili_mi = await akilli_log_denetimi(icerik, gorseller)
             
             if basarili_mi:
@@ -446,4 +431,22 @@ async def unmute(interaction: discord.Interaction, kullanici: discord.Member):
 @bot.tree.command(name="yavaşmod", description="Kanalın yavaş mod süresini ayarlar.")
 @app_commands.describe(saniye="Saniye cinsinden süre (0 kapatır)")
 async def yavasmod(interaction: discord.Interaction, saniye: int):
-    if not yetki_kontrol(inter
+    if not yetki_kontrol(interaction, "manage_channels"):
+        return await hata_mesaji(interaction, "Yetkiniz yok.")
+    try:
+        await interaction.channel.edit(slowmode_delay=saniye)
+        await interaction.response.send_message(f"⏱️ Yavaş mod **{saniye} saniye** olarak ayarlandı.", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Hata: {e}", ephemeral=True)
+
+@bot.tree.command(name="sunucu-kur", description="Kanalları kurar.")
+@app_commands.describe(sifre="Kurulum şifresi")
+async def sunucu_kur(interaction: discord.Interaction, sifre: str):
+    if sifre != "2904" or not yetki_kontrol(interaction, "manage_channels"):
+        return await hata_mesaji(interaction, "Hatalı şifre veya yetki!")
+    await interaction.response.defer()
+    guild = interaction.guild
+    try:
+        kat1 = await guild.create_category("「📌」Önemli")
+        for isim in ["「❓」biz-kimiz", "「🚪」gelen-giden"]:
+            await gui
