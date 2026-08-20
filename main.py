@@ -446,8 +446,7 @@ async def sunucu_kur(interaction: discord.Interaction, sifre: str):
         return await hata_mesaji(interaction, "Hatalı şifre!")
     if not yetki_kontrol(interaction, "manage_channels"):
         return await hata_mesaji(interaction, "Yetkiniz yok!")
-        
     await interaction.response.defer()
-    guild = interaction.guild
     try:
-        kat1 = await guild.create_category(
+        kat1 = await interaction.guild.create_category("Genel Bilgi")
+        awai
