@@ -32,9 +32,10 @@ async def akilli_metin_log_denetimi(icerik, gorsel_sayisi):
     if gorsel_sayisi < 1:
         return False
 
-    # Mesaj içerisindeki saatleri yakala (Örn: 14:30, 16:00)
-    saatler = re.findall(r'(\d{1,2}):(\d{2})', icerik)
-    # Süre ifadelerini yakala (Örn: 2 saat, 1.5 saat, 2s)
+    # Saatleri yakala (Örn: 18:00, 22:00 veya 18.00)
+    saatler = re.findall(r'(\d{1,2})[:\.](\d{2})', icerik)
+    
+    # Süre ifadelerini yakala (Örn: 4 saat, 4s, 3.5 saat, 2,5 saat)
     sure_ifadeleri = re.findall(r'(\d+(?:[.,]\d+)?)\s*(?:saat|s|st)', icerik.lower())
 
     if len(saatler) < 2 or not sure_ifadeleri:
@@ -47,14 +48,17 @@ async def akilli_metin_log_denetimi(icerik, gorsel_sayisi):
         dakika1 = h1 * 60 + m1
         dakika2 = h2 * 60 + m2
         fark_dakika = dakika2 - dakika1
+        
         if fark_dakika < 0:
-            fark_dakika += 24 * 60 # Gece yarısını geçenler için
+            fark_dakika += 24 * 60 # Gece yarısını geçenler için (Örn: 23:00 - 02:00)
 
         hesaplanan_saat = fark_dakika / 60.0
         belirtilen_sure = float(sure_ifadeleri[0].replace(',', '.'))
 
-        if abs(hesaplanan_saat - belirtilen_sure) > 1.5:
+        # SIFIR TOLERANS: Hesaplanan süre ile yazılan süre birebir aynı olmalıdır.
+        if abs(hesaplanan_saat - belirtilen_sure) > 0.01:
             return False
+            
     except Exception as e:
         print(f"Metin Denetim Hatası: {e}")
         return False
@@ -156,7 +160,6 @@ async def on_message_edit(before, after):
         s = SET.get(gid, {})
         
         if s.get("log_dogrulama_aktif", False):
-            # Önceki bot yanıtını ve reaksiyonları temizle
             if after.id in LOG_YANITLARI:
                 try:
                     eski_yanit = await after.channel.fetch_message(LOG_YANITLARI[after.id])
@@ -426,4 +429,4 @@ if __name__ == "__main__":
     threading.Thread(target=lambda: bot.run(discord_token), daemon=True).start()
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
-    
+                
