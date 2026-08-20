@@ -31,6 +31,18 @@ async def akilli_metin_log_denetimi(icerik, gorsel_sayisi):
     if gorsel_sayisi < 1:
         return False
 
+    icerik_lower = icerik.lower()
+    
+    # Kullanıcı metinde herhangi bir süre ifadesi (saat, dk, st vb.) kullanmış mı kontrol et
+    saat_eslesme = re.search(r'(\d+)\s*(?:saat|sa|st|s\b)', icerik_lower)
+    dakika_eslesme = re.search(r'(\d+)\s*(?:dakika|dk|d\b)', icerik_lower)
+    ondalik_eslesme = re.search(r'(\d+[.,]\d+)\s*(?:saat|sa|st|s\b)', icerik_lower)
+
+    # Hiç süre ifadesi yazılmadıysa direkt onay ver
+    if not saat_eslesme and not dakika_eslesme and not ondalik_eslesme:
+        return True
+
+    # Süre yazılmışsa saat matematiğini ve uyumunu kontrol et
     saatler = re.findall(r'(\d{1,2})[:\.](\d{2})', icerik)
     if len(saatler) < 2:
         return False
@@ -46,23 +58,14 @@ async def akilli_metin_log_denetimi(icerik, gorsel_sayisi):
         if fark_dakika < 0:
             fark_dakika += 24 * 60
 
-        icerik_lower = icerik.lower()
-        
-        saat_eslesme = re.search(r'(\d+)\s*(?:saat|sa|st|s\b)', icerik_lower)
-        dakika_eslesme = re.search(r'(\d+)\s*(?:dakika|dk|d\b)', icerik_lower)
-
         yazilan_toplam_dakika = 0
         if saat_eslesme:
             yazilan_toplam_dakika += int(saat_eslesme.group(1)) * 60
         if dakika_eslesme:
             yazilan_toplam_dakika += int(dakika_eslesme.group(1))
 
-        if yazilan_toplam_dakika == 0:
-            ondalik_eslesme = re.search(r'(\d+[.,]\d+)\s*(?:saat|sa|st|s\b)', icerik_lower)
-            if ondalik_eslesme:
-                yazilan_toplam_dakika = int(float(ondalik_eslesme.group(1).replace(',', '.')) * 60)
-            else:
-                return False
+        if yazilan_toplam_dakika == 0 and ondalik_eslesme:
+            yazilan_toplam_dakika = int(float(ondalik_eslesme.group(1).replace(',', '.')) * 60)
 
         if fark_dakika != yazilan_toplam_dakika:
             return False
@@ -437,4 +440,4 @@ if __name__ == "__main__":
     threading.Thread(target=lambda: bot.run(discord_token), daemon=True).start()
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
-            
+        
