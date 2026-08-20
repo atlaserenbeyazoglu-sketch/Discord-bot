@@ -86,13 +86,10 @@ async def on_message(message):
                     pass
                 return
 
-            # Detaylı Analiz Simülasyonu (Roblox oyun içi saat çizelgeleri ve format karşılaştırması)
             metin_kucuk = icerik.lower()
             
             # Formatta saat veya zaman ibaresi var mı kontrolü
             if ("saat" in metin_kucuk or ":" in metin_kucuk) and ("başlangıç" in metin_kucuk or "bitiş" in metin_kucuk or "süre" in metin_kucuk):
-                # Detaylı Görsel İnceleme: Görsel türü, Roblox arayüzü ve saat uyuşmazlığı kontrolü
-                # (Gerçek AI/OCR Vision entegrasyonu aşamasında buraya piksel/saat okuma mantığı bağlanır)
                 try:
                     await message.add_reaction("✅")
                     yanit = await message.channel.send("Onay!")
@@ -398,7 +395,7 @@ async def sunucu_kur(interaction: discord.Interaction, sifre: str):
     except Exception as e:
         await interaction.followup.send(f"❌ Hata: {e}")
 
-@bot.tree.command(name="sil", description="Mesaj silindiğinde.")
+@bot.tree.command(name="sil", description="Mesaj siler.")
 @app_commands.describe(limit="Sayı")
 async def sil(interaction: discord.Interaction, limit: int = 5):
     if not yetki_kontrol(interaction, "manage_messages"):
@@ -417,4 +414,17 @@ async def on_member_join(member):
             try: await member.add_roles(rol)
             except: pass
     if s.get("hosgeldin_kanal_id"):
-        kanal = member.guild.get_channel(int(s
+        kanal = member.guild.get_channel(int(s["hosgeldin_kanal_id"]))
+        if kanal:
+            try: 
+                await kanal.send(f"Hoş geldin {member.mention}! Toplam **{member.guild.member_count}** kişiyiz.")
+            except: 
+                pass
+
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Bot Aktif!", 200
+
+if __name__ == "_
