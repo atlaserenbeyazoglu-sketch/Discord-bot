@@ -28,35 +28,43 @@ bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 LOG_YANITLARI = {}
 
 async def akilli_metin_log_denetimi(icerik, gorsel_sayisi):
-    # En az 1 görsel eklenmiş mi kontrol et
     if gorsel_sayisi < 1:
         return False
 
-    # Saatleri yakala (Örn: 18:00, 22:00 veya 18.00)
     saatler = re.findall(r'(\d{1,2})[:\.](\d{2})', icerik)
-    
-    # Süre ifadelerini yakala (Örn: 4 saat, 4s, 3.5 saat, 2,5 saat)
-    sure_ifadeleri = re.findall(r'(\d+(?:[.,]\d+)?)\s*(?:saat|s|st)', icerik.lower())
-
-    if len(saatler) < 2 or not sure_ifadeleri:
+    if len(saatler) < 2:
         return False
 
     try:
         h1, m1 = int(saatler[0][0]), int(saatler[0][1])
         h2, m2 = int(saatler[1][0]), int(saatler[1][1])
         
-        dakika1 = h1 * 60 + m1
-        dakika2 = h2 * 60 + m2
-        fark_dakika = dakika2 - dakika1
+        dakika_baslangic = h1 * 60 + m1
+        dakika_bitis = h2 * 60 + m2
+        fark_dakika = dakika_bitis - dakika_baslangic
         
         if fark_dakika < 0:
-            fark_dakika += 24 * 60 # Gece yarısını geçenler için (Örn: 23:00 - 02:00)
+            fark_dakika += 24 * 60
 
-        hesaplanan_saat = fark_dakika / 60.0
-        belirtilen_sure = float(sure_ifadeleri[0].replace(',', '.'))
+        icerik_lower = icerik.lower()
+        
+        saat_eslesme = re.search(r'(\d+)\s*(?:saat|sa|st|s\b)', icerik_lower)
+        dakika_eslesme = re.search(r'(\d+)\s*(?:dakika|dk|d\b)', icerik_lower)
 
-        # SIFIR TOLERANS: Hesaplanan süre ile yazılan süre birebir aynı olmalıdır.
-        if abs(hesaplanan_saat - belirtilen_sure) > 0.01:
+        yazilan_toplam_dakika = 0
+        if saat_eslesme:
+            yazilan_toplam_dakika += int(saat_eslesme.group(1)) * 60
+        if dakika_eslesme:
+            yazilan_toplam_dakika += int(dakika_eslesme.group(1))
+
+        if yazilan_toplam_dakika == 0:
+            ondalik_eslesme = re.search(r'(\d+[.,]\d+)\s*(?:saat|sa|st|s\b)', icerik_lower)
+            if ondalik_eslesme:
+                yazilan_toplam_dakika = int(float(ondalik_eslesme.group(1).replace(',', '.')) * 60)
+            else:
+                return False
+
+        if fark_dakika != yazilan_toplam_dakika:
             return False
             
     except Exception as e:
@@ -229,7 +237,7 @@ def yetki_kontrol(interaction, perm):
 
 async def hata_mesaji(interaction, metin):
     if interaction.response.is_done():
-        await interaction.followup.send(f"❌ {metin}", ephemeral=True)
+        await interaction.followup.send(f"❌ {metin}", ephemeral=True, delete_after=5)
     else:
         await interaction.response.send_message(f"❌ {metin}", ephemeral=True)
 
@@ -269,26 +277,26 @@ class SistemYonetimView(discord.ui.View):
         await interaction.response.defer(ephemeral=True)
         self.secilen_otorol = interaction.data["values"][0]
         role_obj = interaction.guild.get_role(int(self.secilen_otorol))
-        await interaction.followup.send(f"📌 Otorol seçildi: **{role_obj.name}**", ephemeral=True)
+        await interaction.followup.send(f"📌 Otorol seçildi: **{role_obj.name}**", ephemeral=True, delete_after=3)
 
     async def hosgeldin_secim_callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         self.secilen_hg_kanal = interaction.data["values"][0]
         kanal_obj = interaction.guild.get_channel(int(self.secilen_hg_kanal))
-        await interaction.followup.send(f"🚪 Hoş geldin kanalı seçildi: {kanal_obj.mention}", ephemeral=True)
+        await interaction.followup.send(f"🚪 Hoş geldin kanalı seçildi: {kanal_obj.mention}", ephemeral=True, delete_after=3)
 
     async def log_secim_callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         self.secilen_log_kanal = interaction.data["values"][0]
         kanal_obj = interaction.guild.get_channel(int(self.secilen_log_kanal))
-        await interaction.followup.send(f"🧾 Log kanalı seçildi: {kanal_obj.mention}", ephemeral=True)
+        await interaction.followup.send(f"🧾 Log kanalı seçildi: {kanal_obj.mention}", ephemeral=True, delete_after=3)
 
     async def dogrulama_secim_callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         val = interaction.data["values"][0]
         self.secilen_log_durum = True if val == "ac" else False
         durum_str = "Aktif (Açık)" if self.secilen_log_durum else "Devre Dışı (Kapalı)"
-        await interaction.followup.send(f"🤖 Akıllı Doğrulama seçildi: **{durum_str}**", ephemeral=True)
+        await interaction.followup.send(f"🤖 Akıllı Doğrulama seçildi: **{durum_str}**", ephemeral=True, delete_after=3)
 
     @discord.ui.button(label="💾 Ayarları Kalıcı Olarak Kaydet", style=discord.ButtonStyle.success, emoji="✅", row=4)
     async def kaydet_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -306,7 +314,7 @@ class SistemYonetimView(discord.ui.View):
             SET[self.guild_id]["log_dogrulama_aktif"] = self.secilen_log_durum
 
         kaydet()
-        await interaction.followup.send("✅ Ayarlar başarıyla kaydedildi!", ephemeral=True)
+        await interaction.followup.send("✅ Ayarlar başarıyla kaydedildi!", ephemeral=True, delete_after=3)
 
 @bot.tree.command(name="özelkontrolpaneli", description="Şifre ile korunan gelişmiş Discord GUI kontrol panelini açar.")
 @app_commands.describe(sifre="Panel erişim şifresi")
@@ -429,4 +437,4 @@ if __name__ == "__main__":
     threading.Thread(target=lambda: bot.run(discord_token), daemon=True).start()
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
-                
+            
